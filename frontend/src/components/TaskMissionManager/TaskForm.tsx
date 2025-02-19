@@ -7,9 +7,6 @@ import {
     MenuItem,
     FormControl,
     InputLabel,
-    OutlinedInput,
-    TextareaAutosize,
-    Input,
     SelectChangeEvent,
     Typography
 } from '@mui/material';
@@ -20,6 +17,15 @@ interface TaskFormProps {
     onSubmit: (task: Task) => void;
     onClose: () => void;
 }
+
+const colorOptions = [
+    { value: 'teal', label: 'Verde Água' },
+    { value: 'cyan', label: 'Ciano' },
+    { value: 'indigo', label: 'Índigo' },
+    { value: 'deepPurple', label: 'Roxo Profundo' },
+    { value: 'pink', label: 'Rosa' },
+    { value: 'amber', label: 'Âmbar' },
+];
 
 const TaskForm: React.FC<TaskFormProps> = ({ users, onSubmit, onClose }) => {
     const [newTask, setNewTask] = useState<Task>({
@@ -34,6 +40,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ users, onSubmit, onClose }) => {
         points: 0,
         comments: '',
         attachments: [],
+        color: 'teal',
     });
     const [dateError, setDateError] = useState<string | null>(null);
 
@@ -47,11 +54,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ users, onSubmit, onClose }) => {
 
     const handleSelectChange = (e: SelectChangeEvent<string>) => {
         const { name, value } = e.target;
-        setNewTask(prev => ({ ...prev, [name as string]: value }));
-    };
-
-    const handleStatusChange = (e: SelectChangeEvent) => {
-        setNewTask(prev => ({ ...prev, status: e.target.value as 'pending' | 'in_progress' | 'completed' }));
+        setNewTask(prev => ({ ...prev, [name]: value }));
     };
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -64,21 +67,20 @@ const TaskForm: React.FC<TaskFormProps> = ({ users, onSubmit, onClose }) => {
     const validateDates = (field: string, value: string) => {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-        const selectedDate = new Date(value);
-        selectedDate.setHours(0, 0, 0, 0);
-        const startDate = field === 'startDate' ? selectedDate : new Date(newTask.startDate);
-        startDate.setHours(0, 0, 0, 0);
-        const endDate = field === 'endDate' ? selectedDate : new Date(newTask.endDate);
-        endDate.setHours(0, 0, 0, 0);
+        const selectedDate = new Date(value + 'T00:00:00');
+        const startDate = field === 'startDate' ? selectedDate : new Date(newTask.startDate + 'T00:00:00');
+        const endDate = field === 'endDate' ? selectedDate : new Date(newTask.endDate + 'T00:00:00');
 
         if (selectedDate < today) {
             setDateError('A data não pode ser anterior a hoje');
             return false;
         }
+
         if (field === 'endDate' && endDate < startDate) {
             setDateError('A data de conclusão não pode ser anterior à data de início');
             return false;
         }
+
         setDateError(null);
         return true;
     };
@@ -86,13 +88,15 @@ const TaskForm: React.FC<TaskFormProps> = ({ users, onSubmit, onClose }) => {
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (validateDates('startDate', newTask.startDate) && validateDates('endDate', newTask.endDate)) {
-            console.log('Dados do formulário de tarefa:', newTask);
             onSubmit(newTask);
         }
     };
 
     return (
         <Box>
+            <Typography variant="h6" gutterBottom>
+                Nova Tarefa
+            </Typography>
             <form onSubmit={handleSubmit}>
                 <TextField
                     label="Título"
@@ -113,13 +117,13 @@ const TaskForm: React.FC<TaskFormProps> = ({ users, onSubmit, onClose }) => {
                     multiline
                     rows={4}
                 />
-                <FormControl fullWidth margin="dense">
+                <FormControl fullWidth margin="normal">
                     <InputLabel>Status</InputLabel>
                     <Select
                         name="status"
                         value={newTask.status}
-                        onChange={handleStatusChange}
-                        input={<OutlinedInput label="Status" />}
+                        onChange={handleSelectChange}
+                        label="Status"
                         required
                     >
                         <MenuItem value="pending">Pendente</MenuItem>
@@ -139,6 +143,9 @@ const TaskForm: React.FC<TaskFormProps> = ({ users, onSubmit, onClose }) => {
                     required
                     error={!!dateError}
                     helperText={dateError}
+                    inputProps={{
+                        min: new Date().toISOString().split('T')[0]
+                    }}
                 />
                 <TextField
                     label="Data de Conclusão"
@@ -151,16 +158,21 @@ const TaskForm: React.FC<TaskFormProps> = ({ users, onSubmit, onClose }) => {
                     InputLabelProps={{ shrink: true }}
                     error={!!dateError}
                     helperText={dateError}
+                    inputProps={{
+                        min: newTask.startDate || new Date().toISOString().split('T')[0]
+                    }}
                 />
-                <FormControl fullWidth margin="dense">
+                <FormControl fullWidth margin="normal">
                     <InputLabel>Responsável</InputLabel>
                     <Select
                         name="assignedTo"
-                        value={newTask.assignedTo}
+                        value={newTask.assignedTo || ''}
                         onChange={handleSelectChange}
-                        input={<OutlinedInput label="Responsável" />}
-                        required
+                        label="Responsável"
                     >
+                        <MenuItem value="">
+                            <em>Nenhum</em>
+                        </MenuItem>
                         {users.map((user) => (
                             <MenuItem key={user._id} value={user._id}>
                                 {user.username}
@@ -177,30 +189,57 @@ const TaskForm: React.FC<TaskFormProps> = ({ users, onSubmit, onClose }) => {
                     fullWidth
                     margin="normal"
                 />
-                <TextareaAutosize
+                <FormControl fullWidth margin="normal">
+                    <InputLabel>Cor do Cartão</InputLabel>
+                    <Select
+                        name="color"
+                        value={newTask.color}
+                        onChange={handleSelectChange}
+                        label="Cor do Cartão"
+                    >
+                        {colorOptions.map((option) => (
+                            <MenuItem key={option.value} value={option.value}>
+                                {option.label}
+                            </MenuItem>
+                        ))}
+                    </Select>
+                </FormControl>
+                <TextField
+                    label="Comentários"
                     name="comments"
                     value={newTask.comments}
                     onChange={handleInputChange}
-                    placeholder="Comentários/Anotações"
-                    style={{ width: '100%', marginTop: '16px', padding: '8px' }}
+                    fullWidth
+                    margin="normal"
+                    multiline
+                    rows={4}
                 />
-                <Input
+                <input
                     type="file"
-                    inputProps={{ multiple: true }}
+                    multiple
                     onChange={handleFileChange}
-                    style={{ marginTop: '16px' }}
+                    style={{ display: 'none' }}
+                    id="file-upload"
                 />
-                {dateError && (
-                    <Typography color="error" sx={{ mt: 2 }}>
-                        {dateError}
-                    </Typography>
+                <label htmlFor="file-upload">
+                    <Button variant="contained" component="span" sx={{ mt: 2, mb: 2 }}>
+                        Anexar Arquivos
+                    </Button>
+                </label>
+                {newTask.attachments.length > 0 && (
+                    <Box sx={{ mt: 2, mb: 2 }}>
+                        <Typography variant="subtitle1">Anexos:</Typography>
+                        {newTask.attachments.map((attachment, index) => (
+                            <Typography key={index}>{attachment}</Typography>
+                        ))}
+                    </Box>
                 )}
-                <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between' }}>
+                <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
+                    <Button onClick={onClose} color="secondary" sx={{ mr: 1 }}>
+                        Cancelar
+                    </Button>
                     <Button type="submit" variant="contained" color="primary">
                         Criar Tarefa
-                    </Button>
-                    <Button variant="outlined" color="secondary" onClick={onClose}>
-                        Cancelar
                     </Button>
                 </Box>
             </form>

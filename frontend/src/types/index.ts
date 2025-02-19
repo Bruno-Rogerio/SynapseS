@@ -9,21 +9,6 @@ export interface User {
     fullName?: string;
 }
 
-
-export interface Task {
-    _id: string;
-    title: string;
-    description: string;
-    status: 'pending' | 'in_progress' | 'completed';
-    startDate: string;
-    endDate: string;
-    assignedTo: string;
-    createdBy: string;
-    points: number;
-    comments: string;
-    attachments: string[];
-}
-
 export interface Mission {
     _id: string;
     title: string;
@@ -37,4 +22,19 @@ export interface Mission {
     tasks: Task[];
     comments: string;
     attachments: string[]; // Change to string[] to store file URLs
+}
+
+export interface Task {
+    _id: string;
+    title: string;
+    description: string;
+    status: 'pending' | 'in_progress' | 'completed';
+    startDate: string;
+    endDate: string;
+    assignedTo: string;
+    createdBy: string;
+    points: number;
+    comments: string;
+    attachments: string[];
+    color?: 'teal' | 'cyan' | 'indigo' | 'deepPurple' | 'pink' | 'amber';
 }

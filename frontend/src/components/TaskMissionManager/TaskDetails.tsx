@@ -23,6 +23,15 @@ interface TaskDetailsProps {
     onStatusChange: (status: 'pending' | 'in_progress' | 'completed') => void;
 }
 
+const colorOptions = [
+    { value: 'teal', label: 'Verde Água' },
+    { value: 'cyan', label: 'Ciano' },
+    { value: 'indigo', label: 'Índigo' },
+    { value: 'deepPurple', label: 'Roxo Profundo' },
+    { value: 'pink', label: 'Rosa' },
+    { value: 'amber', label: 'Âmbar' },
+];
+
 const TaskDetails: React.FC<TaskDetailsProps> = ({
     task: initialTask,
     users,
@@ -48,14 +57,15 @@ const TaskDetails: React.FC<TaskDetailsProps> = ({
         setTask(prevTask => ({ ...prevTask, [name]: value }));
     };
 
+    const handleSelectChange = (e: SelectChangeEvent<string>) => {
+        const { name, value } = e.target;
+        setTask(prevTask => ({ ...prevTask, [name]: value }));
+    };
+
     const handleStatusChange = (e: SelectChangeEvent<'pending' | 'in_progress' | 'completed'>) => {
         const newStatus = e.target.value as 'pending' | 'in_progress' | 'completed';
         setTask(prevTask => ({ ...prevTask, status: newStatus }));
         onStatusChange(newStatus);
-    };
-
-    const handleAssignedToChange = (e: SelectChangeEvent<string>) => {
-        setTask(prevTask => ({ ...prevTask, assignedTo: e.target.value }));
     };
 
     const handleCommentChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -74,12 +84,9 @@ const TaskDetails: React.FC<TaskDetailsProps> = ({
     const validateDates = (field: string, value: string) => {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-        const selectedDate = new Date(value);
-        selectedDate.setHours(0, 0, 0, 0);
-        const startDate = field === 'startDate' ? selectedDate : new Date(task.startDate);
-        startDate.setHours(0, 0, 0, 0);
-        const endDate = field === 'endDate' ? selectedDate : new Date(task.endDate);
-        endDate.setHours(0, 0, 0, 0);
+        const selectedDate = new Date(value + 'T00:00:00');
+        const startDate = field === 'startDate' ? selectedDate : new Date(task.startDate + 'T00:00:00');
+        const endDate = field === 'endDate' ? selectedDate : new Date(task.endDate + 'T00:00:00');
 
         if (selectedDate < today) {
             setDateError('A data não pode ser anterior a hoje');
@@ -100,19 +107,6 @@ const TaskDetails: React.FC<TaskDetailsProps> = ({
         const date = new Date(dateString);
         if (isNaN(date.getTime())) return '';
         return date.toISOString().split('T')[0];
-    };
-
-    const getAssignedUserId = (): string => {
-        if (typeof task.assignedTo === 'string') {
-            return task.assignedTo;
-        }
-        if (task.assignedTo && typeof task.assignedTo === 'object' && 'id' in task.assignedTo) {
-            return (task.assignedTo as { id: string }).id;
-        }
-        if (task.assignedTo && typeof task.assignedTo === 'object' && '_id' in task.assignedTo) {
-            return (task.assignedTo as { _id: string })._id;
-        }
-        return '';
     };
 
     const handleSave = () => {
@@ -159,8 +153,9 @@ const TaskDetails: React.FC<TaskDetailsProps> = ({
             <FormControl fullWidth margin="normal">
                 <InputLabel>Responsável</InputLabel>
                 <Select
-                    value={getAssignedUserId()}
-                    onChange={handleAssignedToChange}
+                    name="assignedTo"
+                    value={task.assignedTo}
+                    onChange={handleSelectChange}
                     label="Responsável"
                 >
                     <MenuItem value="">
@@ -184,6 +179,9 @@ const TaskDetails: React.FC<TaskDetailsProps> = ({
                 InputLabelProps={{ shrink: true }}
                 error={!!dateError}
                 helperText={dateError}
+                inputProps={{
+                    min: new Date().toISOString().split('T')[0]
+                }}
             />
             <TextField
                 fullWidth
@@ -196,7 +194,34 @@ const TaskDetails: React.FC<TaskDetailsProps> = ({
                 InputLabelProps={{ shrink: true }}
                 error={!!dateError}
                 helperText={dateError}
+                inputProps={{
+                    min: task.startDate || new Date().toISOString().split('T')[0]
+                }}
             />
+            <TextField
+                fullWidth
+                label="Pontos"
+                name="points"
+                type="number"
+                value={task.points}
+                onChange={handleChange}
+                margin="normal"
+            />
+            <FormControl fullWidth margin="normal">
+                <InputLabel>Cor do Cartão</InputLabel>
+                <Select
+                    name="color"
+                    value={task.color || ''}
+                    onChange={handleSelectChange}
+                    label="Cor do Cartão"
+                >
+                    {colorOptions.map((option) => (
+                        <MenuItem key={option.value} value={option.value}>
+                            {option.label}
+                        </MenuItem>
+                    ))}
+                </Select>
+            </FormControl>
             <TextField
                 fullWidth
                 label="Comentários"

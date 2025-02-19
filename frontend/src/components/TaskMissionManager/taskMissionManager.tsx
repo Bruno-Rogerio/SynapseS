@@ -13,7 +13,6 @@ import {
     Card,
     CardContent,
     Grid,
-    Chip,
 } from '@mui/material';
 import { FaTasks, FaProjectDiagram } from 'react-icons/fa';
 import config from '../../config';
@@ -22,6 +21,7 @@ import MissionDetails from './MissionDetails';
 import TaskDetails from './TaskDetails';
 import MissionForm from './MissionForm';
 import TaskForm from './TaskForm';
+import UserTaskColumn from './UserTaskColumn';
 import { Mission, Task, User } from '../../types';
 
 const API_BASE_URL = config.API_BASE_URL;
@@ -46,6 +46,20 @@ const TaskMissionManager: React.FC = () => {
         fetchTasks();
         fetchMissions();
     }, []);
+
+    useEffect(() => {
+    console.log('Detailed Tasks:', tasks.map(task => ({
+        id: task._id,
+        title: task.title,
+        assignedTo: typeof task.assignedTo === 'object' && task.assignedTo !== null ? task.assignedTo._id : task.assignedTo
+    })));
+    console.log('Detailed Users:', users.map(user => ({
+        id: user._id,
+        username: user.username
+    })));
+}, [tasks, users]);
+
+
 
     const fetchUsers = async () => {
         console.log('Iniciando fetchUsers');
@@ -199,14 +213,12 @@ const TaskMissionManager: React.FC = () => {
             files.forEach((file, index) => {
                 formData.append(`file${index}`, file);
             });
-
             try {
                 const response = await axios.post(`${API_BASE_URL}/api/tasks/${selectedTask._id}/attachments`, formData, {
                     headers: {
                         'Content-Type': 'multipart/form-data'
                     }
                 });
-
                 const updatedTask = { ...selectedTask, attachments: response.data.attachments };
                 await handleSave(updatedTask);
             } catch (error) {
@@ -224,55 +236,66 @@ const TaskMissionManager: React.FC = () => {
         }
     };
 
+    const groupTasksByUser = (tasks: Task[], users: User[]) => {
+        console.log('Grouping tasks by user');
+        console.log('All tasks:', tasks);
+        console.log('All users:', users);
+
+        const groupedTasks = users.map(user => {
+            const userTasks = tasks.filter(task => {
+                if (typeof task.assignedTo === 'string') {
+                    return task.assignedTo === user._id;
+                } else if (task.assignedTo && typeof task.assignedTo === 'object' && '_id' in task.assignedTo) {
+                    return task.assignedTo._id === user._id;
+                }
+                return false;
+            });
+            console.log(`Tasks for user ${user.username}:`, userTasks);
+            return {
+                user,
+                tasks: userTasks
+            };
+        });
+
+        const unassignedTasks = tasks.filter(task => !task.assignedTo);
+        if (unassignedTasks.length > 0) {
+            console.log('Unassigned tasks:', unassignedTasks);
+            groupedTasks.push({
+                user: { _id: 'unassigned', username: 'Não atribuído' } as User,
+                tasks: unassignedTasks
+            });
+        }
+
+        console.log('Final grouped tasks:', groupedTasks);
+        return groupedTasks;
+    };
+
+
     const renderTaskList = () => {
         console.log('Renderizando lista de tarefas');
         console.log('Tasks:', tasks);
         console.log('Users:', users);
+
+        const groupedTasks = groupTasksByUser(tasks, users);
+        console.log('Grouped Tasks:', groupedTasks);
+
         return (
-            <Grid container spacing={2}>
-                {tasks.map(task => {
-                    const assignedUser = users.find(user => user._id === task.assignedTo);
-                    console.log('Task:', task);
-                    console.log('Assigned User:', assignedUser);
+            <Box sx={{ display: 'flex', overflowX: 'auto', flexGrow: 1, p: 2 }}>
+                {groupedTasks.map(({ user, tasks }) => {
+                    console.log(`Rendering column for ${user.username} with ${tasks.length} tasks`);
                     return (
-                        <Grid item xs={12} sm={6} md={4} key={task._id}>
-                            <Card
-                                onClick={() => handleTaskClick(task)}
-                                sx={{
-                                    cursor: 'pointer',
-                                    '&:hover': {
-                                        boxShadow: 6
-                                    }
-                                }}
-                            >
-                                <CardContent>
-                                    <Typography variant="h6">{task.title}</Typography>
-                                    <Typography color="textSecondary" noWrap>{task.description}</Typography>
-                                    {assignedUser && (
-                                        <Typography variant="body2" sx={{ mt: 1 }}>
-                                            Responsável: {assignedUser.username}
-                                        </Typography>
-                                    )}
-                                    <Chip
-                                        label={task.status === 'pending' ? 'Pendente' :
-                                            task.status === 'in_progress' ? 'Em Progresso' :
-                                                'Concluída'}
-                                        color={
-                                            task.status === 'completed' ? 'success' :
-                                                task.status === 'in_progress' ? 'primary' :
-                                                    'default'
-                                        }
-                                        size="small"
-                                        sx={{ mt: 1 }}
-                                    />
-                                </CardContent>
-                            </Card>
-                        </Grid>
+                        <UserTaskColumn
+                            key={user._id}
+                            user={user}
+                            tasks={tasks}
+                            onTaskClick={handleTaskClick}
+                        />
                     );
                 })}
-            </Grid>
+            </Box>
         );
     };
+
 
     const renderMissionList = () => (
         <Grid container spacing={2}>
