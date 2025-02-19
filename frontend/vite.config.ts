@@ -6,6 +6,13 @@ export default defineConfig({
   server: {
     port: 3000, // ou a porta que você preferir
     open: true, // abre o navegador automaticamente
+    proxy: {
+      '/api': {
+        target: 'http://localhost:5000', // ajuste para a URL do seu backend
+        changeOrigin: true,
+        secure: false,
+      }
+    }
   },
   build: {
     outDir: 'dist',
