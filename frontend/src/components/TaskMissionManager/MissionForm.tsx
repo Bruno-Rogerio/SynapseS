@@ -1,182 +1,246 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-    Box,
-    Button,
     TextField,
-    Select,
-    MenuItem,
+    Button,
+    Box,
     FormControl,
     InputLabel,
-    Checkbox,
-    ListItemText,
-    OutlinedInput,
-    TextareaAutosize,
-    Input,
-    SelectChangeEvent
+    Select,
+    MenuItem,
+    Chip,
+    SelectChangeEvent,
 } from '@mui/material';
 import { Mission, User } from '../../types';
+import { useAuth } from '../../hooks/useAuth';
 
 interface MissionFormProps {
     users: User[];
-    onSubmit: (mission: Mission) => void;
+    onSubmit: (mission: Omit<Mission, '_id'>) => void;
     onClose: () => void;
+    initialMission?: Mission;
 }
 
-const MissionForm: React.FC<MissionFormProps> = ({ users, onSubmit }) => {
-    const [newMission, setNewMission] = useState<Mission>({
-        _id: '',
+const MissionForm: React.FC<MissionFormProps> = ({ users, onSubmit, onClose, initialMission }) => {
+    const { user } = useAuth();
+    const [mission, setMission] = useState<Omit<Mission, '_id'>>({
         title: '',
         description: '',
         startDate: '',
         endDate: '',
         leader: '',
         team: [],
-        category: '',
-        createdBy: '',
         tasks: [],
+        createdBy: user?._id || '',
+        status: 'pending',
+        points: 0,
         comments: '',
         attachments: [],
+        color: 'teal'
+    });
+    const [dateErrors, setDateErrors] = useState({
+        startDate: '',
+        endDate: ''
     });
 
-    // Manipulação de inputs de texto
-    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    useEffect(() => {
+        if (initialMission) {
+            setMission(initialMission);
+        }
+    }, [initialMission]);
+
+    useEffect(() => {
+        setMission(prev => ({ ...prev, createdBy: user?._id || '' }));
+    }, [user]);
+
+    const validateDates = (field: string, value: string) => {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const selectedDate = new Date(value + 'T00:00:00');
+        const startDate = field === 'startDate' ? selectedDate : new Date(mission.startDate + 'T00:00:00');
+        const endDate = field === 'endDate' ? selectedDate : new Date(mission.endDate + 'T00:00:00');
+
+        let newErrors = { ...dateErrors };
+
+        if (selectedDate < today) {
+            newErrors[field as keyof typeof dateErrors] = 'A data não pode ser anterior a hoje';
+        } else {
+            newErrors[field as keyof typeof dateErrors] = '';
+        }
+
+        if (field === 'endDate' && endDate < startDate) {
+            newErrors.endDate = 'A data de conclusão não pode ser anterior à data de início';
+        }
+
+        setDateErrors(newErrors);
+        return !newErrors.startDate && !newErrors.endDate;
+    };
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement> | SelectChangeEvent<string | string[]>) => {
         const { name, value } = e.target;
-        setNewMission(prev => ({ ...prev, [name]: value }));
-    };
+        setMission(prev => ({ ...prev, [name]: value }));
 
-    // Manipulação de selects normais
-    const handleSelectChange = (e: SelectChangeEvent<string>) => {
-        setNewMission(prev => ({ ...prev, leader: e.target.value }));
-    };
-
-    // Manipulação de selects múltiplos (equipe)
-    const handleTeamChange = (e: SelectChangeEvent<string[]>) => {
-        setNewMission(prev => ({ ...prev, team: e.target.value as string[] }));
-    };
-
-    // Manipulação de arquivos
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files) {
-            const fileUrls = Array.from(e.target.files).map(file => URL.createObjectURL(file));
-            setNewMission(prev => ({ ...prev, attachments: fileUrls }));
+        if (name === 'startDate' || name === 'endDate') {
+            validateDates(name, value as string);
         }
     };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        onSubmit(newMission);
+        const startDateValid = validateDates('startDate', mission.startDate);
+        const endDateValid = validateDates('endDate', mission.endDate);
+        if (startDateValid && endDateValid) {
+            onSubmit({
+                ...mission,
+                createdBy: user?._id || '',
+            });
+        }
     };
 
     return (
-        <Box>
-            <form onSubmit={handleSubmit}>
-                <TextField
-                    label="Título"
-                    name="title"
-                    value={newMission.title}
-                    onChange={handleInputChange}
-                    fullWidth
-                    margin="normal"
-                />
-                <TextField
-                    label="Descrição"
-                    name="description"
-                    value={newMission.description}
-                    onChange={handleInputChange}
-                    fullWidth
-                    margin="normal"
-                />
-                <TextField
-                    label="Data de Início"
-                    name="startDate"
-                    type="date"
-                    value={newMission.startDate}
-                    onChange={handleInputChange}
-                    fullWidth
-                    margin="normal"
-                    InputLabelProps={{ shrink: true }}
-                />
-                <TextField
-                    label="Data de Conclusão"
-                    name="endDate"
-                    type="date"
-                    value={newMission.endDate}
-                    onChange={handleInputChange}
-                    fullWidth
-                    margin="normal"
-                    InputLabelProps={{ shrink: true }}
-                />
-
-                {/* Seleção do líder */}
-                <FormControl fullWidth margin="dense">
-                    <InputLabel>Líder da Missão</InputLabel>
-                    <Select
-                        value={newMission.leader}
-                        onChange={handleSelectChange}
-                        input={<OutlinedInput label="Líder da Missão" />}
-                    >
-                        {users.map((user) => (
-                            <MenuItem key={user._id} value={user._id}>
-                                {user.username}
-                            </MenuItem>
-                        ))}
-                    </Select>
-                </FormControl>
-
-                {/* Seleção da equipe */}
-                <FormControl fullWidth margin="dense">
-                    <InputLabel>Equipe</InputLabel>
-                    <Select
-                        multiple
-                        value={newMission.team}
-                        onChange={handleTeamChange}
-                        input={<OutlinedInput label="Equipe" />}
-                        renderValue={(selected) => (selected as string[])
-                            .map((id) => users.find((user) => user._id === id)?.username)
-                            .join(', ')}
-                    >
-                        {users.map((user) => (
-                            <MenuItem key={user._id} value={user._id}>
-                                <Checkbox checked={newMission.team.includes(user._id)} />
-                                <ListItemText primary={user.username} />
-                            </MenuItem>
-                        ))}
-                    </Select>
-                </FormControl>
-
-                {/* Categoria */}
-                <TextField
-                    label="Categoria/Tag"
-                    name="category"
-                    value={newMission.category}
-                    onChange={handleInputChange}
-                    fullWidth
-                    margin="normal"
-                />
-
-                {/* Comentários */}
-                <TextareaAutosize
-                    name="comments"
-                    value={newMission.comments}
-                    onChange={handleInputChange}
-                    placeholder="Comentários/Anotações"
-                    style={{ width: '100%', marginTop: '16px', padding: '8px' }}
-                />
-
-                {/* Upload de arquivos */}
-                <Input
-                    type="file"
-                    inputProps={{ multiple: true }}
-                    onChange={handleFileChange}
-                    style={{ marginTop: '16px' }}
-                />
-
-                {/* Botão de submissão */}
-                <Button type="submit" variant="contained" color="primary" sx={{ mt: 2 }}>
-                    Criar Missão
+        <form onSubmit={handleSubmit}>
+            <TextField
+                fullWidth
+                label="Título"
+                name="title"
+                value={mission.title}
+                onChange={handleChange}
+                margin="normal"
+                required
+            />
+            <TextField
+                fullWidth
+                label="Descrição"
+                name="description"
+                value={mission.description}
+                onChange={handleChange}
+                margin="normal"
+                multiline
+                rows={4}
+                required
+            />
+            <TextField
+                fullWidth
+                label="Data de Início"
+                name="startDate"
+                type="date"
+                value={mission.startDate}
+                onChange={handleChange}
+                margin="normal"
+                InputLabelProps={{
+                    shrink: true,
+                }}
+                required
+                error={!!dateErrors.startDate}
+                helperText={dateErrors.startDate}
+            />
+            <TextField
+                fullWidth
+                label="Data de Término"
+                name="endDate"
+                type="date"
+                value={mission.endDate}
+                onChange={handleChange}
+                margin="normal"
+                InputLabelProps={{
+                    shrink: true,
+                }}
+                required
+                error={!!dateErrors.endDate}
+                helperText={dateErrors.endDate}
+            />
+            <FormControl fullWidth margin="normal" required>
+                <InputLabel>Líder</InputLabel>
+                <Select
+                    name="leader"
+                    value={mission.leader}
+                    onChange={handleChange}
+                >
+                    {users.map(user => (
+                        <MenuItem key={user._id} value={user._id}>{user.username}</MenuItem>
+                    ))}
+                </Select>
+            </FormControl>
+            <FormControl fullWidth margin="normal">
+                <InputLabel>Equipe</InputLabel>
+                <Select
+                    multiple
+                    name="team"
+                    value={mission.team}
+                    onChange={handleChange}
+                    renderValue={(selected) => (
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                            {(selected as string[]).map((value) => (
+                                <Chip key={value} label={users.find(user => user._id === value)?.username} />
+                            ))}
+                        </Box>
+                    )}
+                >
+                    {users.map(user => (
+                        <MenuItem key={user._id} value={user._id}>{user.username}</MenuItem>
+                    ))}
+                </Select>
+            </FormControl>
+            <TextField
+                fullWidth
+                label="Pontos"
+                name="points"
+                type="number"
+                value={mission.points}
+                onChange={handleChange}
+                margin="normal"
+            />
+            <TextField
+                fullWidth
+                label="Comentários"
+                name="comments"
+                value={mission.comments}
+                onChange={handleChange}
+                margin="normal"
+                multiline
+                rows={4}
+            />
+            <FormControl fullWidth margin="normal">
+                <InputLabel>Status</InputLabel>
+                <Select
+                    name="status"
+                    value={mission.status}
+                    onChange={handleChange}
+                >
+                    <MenuItem value="pending">Pendente</MenuItem>
+                    <MenuItem value="in_progress">Em Progresso</MenuItem>
+                    <MenuItem value="completed">Concluída</MenuItem>
+                </Select>
+            </FormControl>
+            <FormControl fullWidth margin="normal">
+                <InputLabel>Cor</InputLabel>
+                <Select
+                    name="color"
+                    value={mission.color}
+                    onChange={handleChange}
+                >
+                    <MenuItem value="teal">Teal</MenuItem>
+                    <MenuItem value="cyan">Cyan</MenuItem>
+                    <MenuItem value="indigo">Indigo</MenuItem>
+                    <MenuItem value="deepPurple">Deep Purple</MenuItem>
+                    <MenuItem value="pink">Pink</MenuItem>
+                    <MenuItem value="amber">Amber</MenuItem>
+                </Select>
+            </FormControl>
+            <Box sx={{ mt: 2 }}>
+                <Button
+                    type="submit"
+                    variant="contained"
+                    color="primary"
+                    sx={{ mr: 1 }}
+                    disabled={!!dateErrors.startDate || !!dateErrors.endDate}
+                >
+                    Salvar
                 </Button>
-            </form>
-        </Box>
+                <Button onClick={onClose} variant="outlined">
+                    Cancelar
+                </Button>
+            </Box>
+        </form>
     );
 };
 

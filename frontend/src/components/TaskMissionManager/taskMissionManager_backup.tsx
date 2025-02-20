@@ -10,6 +10,9 @@ import {
     Button,
     Tabs,
     Tab,
+    Card,
+    CardContent,
+    Grid,
 } from '@mui/material';
 import { FaTasks, FaProjectDiagram } from 'react-icons/fa';
 import config from '../../config';
@@ -19,7 +22,6 @@ import TaskDetails from './TaskDetails';
 import MissionForm from './MissionForm';
 import TaskForm from './TaskForm';
 import UserTaskColumn from './UserTaskColumn';
-import MissionTimeline from './MissionTimeline';
 import { Mission, Task, User } from '../../types';
 
 const API_BASE_URL = config.API_BASE_URL;
@@ -45,9 +47,25 @@ const TaskMissionManager: React.FC = () => {
         fetchMissions();
     }, []);
 
+    useEffect(() => {
+    console.log('Detailed Tasks:', tasks.map(task => ({
+        id: task._id,
+        title: task.title,
+        assignedTo: typeof task.assignedTo === 'object' && task.assignedTo !== null ? task.assignedTo._id : task.assignedTo
+    })));
+    console.log('Detailed Users:', users.map(user => ({
+        id: user._id,
+        username: user.username
+    })));
+}, [tasks, users]);
+
+
+
     const fetchUsers = async () => {
+        console.log('Iniciando fetchUsers');
         try {
             const response = await axios.get(`${API_BASE_URL}/api/users`);
+            console.log('Resposta do servidor (users):', response.data);
             setUsers(response.data);
         } catch (err) {
             console.error('Erro ao carregar usuários:', err);
@@ -56,9 +74,12 @@ const TaskMissionManager: React.FC = () => {
     };
 
     const fetchTasks = async () => {
+        console.log('Iniciando fetchTasks');
         try {
             const response = await axios.get(`${API_BASE_URL}/api/tasks`);
+            console.log('Resposta do servidor (tasks):', response.data);
             setTasks(response.data);
+            console.log('Estado tasks atualizado:', response.data);
         } catch (err) {
             console.error('Erro ao carregar tarefas:', err);
             setError('Erro ao carregar tarefas');
@@ -68,29 +89,22 @@ const TaskMissionManager: React.FC = () => {
     };
 
     const fetchMissions = async () => {
+        console.log('Iniciando fetchMissions');
         try {
             const response = await axios.get(`${API_BASE_URL}/api/missions`);
+            console.log('Resposta do servidor (missions):', response.data);
             setMissions(response.data);
         } catch (err) {
             console.error('Erro ao carregar missões:', err);
             setError('Erro ao carregar missões');
         }
     };
-    
-    const handleTaskClick = (taskOrId: Task | string) => {
-        let task: Task | undefined;
-        if (typeof taskOrId === 'string') {
-            task = tasks.find(t => t._id === taskOrId);
-        } else {
-            task = taskOrId;
-        }
-        if (task) {
-            setSelectedTask(task);
-            setModalContent('task');
-            setIsModalOpen(true);
-        }
-    };
 
+    const handleTaskClick = (task: Task) => {
+        setSelectedTask(task);
+        setModalContent('task');
+        setIsModalOpen(true);
+    };
 
     const handleMissionClick = (mission: Mission) => {
         setSelectedMission(mission);
@@ -98,17 +112,10 @@ const TaskMissionManager: React.FC = () => {
         setIsModalOpen(true);
     };
 
-    const handleCreateTask = (missionId?: string) => {
+    const handleCreateTask = () => {
         setSelectedTask(null);
         setModalContent('taskForm');
         setIsModalOpen(true);
-        // Se missionId for fornecido, podemos usá-lo para pré-preencher o formulário de tarefa
-        if (missionId) {
-            const mission = missions.find(m => m._id === missionId);
-            if (mission) {
-                setSelectedMission(mission);
-            }
-        }
     };
 
     const handleCreateMission = () => {
@@ -117,14 +124,14 @@ const TaskMissionManager: React.FC = () => {
         setIsModalOpen(true);
     };
 
-    const handleSave = async (data: Omit<Task | Mission, '_id'> & { _id?: string }) => {
+    const handleSave = async (data: Task | Mission) => {
         try {
-            if ('assignedTo' in data) {
+            if ('status' in data) {
                 // It's a task
                 const taskData = {
                     ...data,
                     createdBy: user?._id || '',
-                    color: data.color || 'teal',
+                    color: data.color || 'teal', // Adicionando a cor explicitamente
                     startDate: data.startDate ? new Date(data.startDate).toISOString() : null,
                     endDate: data.endDate ? new Date(data.endDate).toISOString() : null
                 };
@@ -143,30 +150,18 @@ const TaskMissionManager: React.FC = () => {
                 setSelectedTask(null);
             } else {
                 // It's a mission
-                console.log('Sending mission data:', data);
-                let response;
                 if (data._id) {
-                    response = await axios.put(`${API_BASE_URL}/api/missions/${data._id}`, data);
+                    await axios.put(`${API_BASE_URL}/api/missions/${data._id}`, data);
                 } else {
-                    response = await axios.post(`${API_BASE_URL}/api/missions`, data);
+                    await axios.post(`${API_BASE_URL}/api/missions`, data);
                 }
-                console.log('Server response:', response.data);
-                const updatedMission = response.data.mission || response.data;
-                setMissions(prevMissions =>
-                    data._id
-                        ? prevMissions.map(mission => mission._id === data._id ? updatedMission : mission)
-                        : [...prevMissions, updatedMission]
-                );
-                setSelectedMission(null);
+                await fetchMissions();
             }
             setSnackbarMessage('Salvo com sucesso');
             setSnackbarOpen(true);
             setIsModalOpen(false);
         } catch (error) {
             console.error('Erro ao salvar:', error);
-            if (axios.isAxiosError(error) && error.response) {
-                console.error('Resposta do servidor:', error.response.data);
-            }
             setError('Erro ao salvar');
             setSnackbarOpen(true);
         }
@@ -176,10 +171,10 @@ const TaskMissionManager: React.FC = () => {
         try {
             if (type === 'task') {
                 await axios.delete(`${API_BASE_URL}/api/tasks/${id}`);
-                setTasks(prevTasks => prevTasks.filter(task => task._id !== id));
+                await fetchTasks();
             } else {
                 await axios.delete(`${API_BASE_URL}/api/missions/${id}`);
-                setMissions(prevMissions => prevMissions.filter(mission => mission._id !== id));
+                await fetchMissions();
             }
             setSnackbarMessage('Excluído com sucesso');
             setSnackbarOpen(true);
@@ -212,6 +207,7 @@ const TaskMissionManager: React.FC = () => {
             updateTaskComment(selectedTask._id, comments);
         }
     };
+
     const handleFileChange = async (files: File[]) => {
         if (selectedTask && selectedTask._id) {
             const formData = new FormData();
@@ -242,40 +238,92 @@ const TaskMissionManager: React.FC = () => {
     };
 
     const groupTasksByUser = (tasks: Task[], users: User[]) => {
-        const groupedTasks = users.map(user => ({
-            user,
-            tasks: tasks.filter(task => {
+        console.log('Grouping tasks by user');
+        console.log('All tasks:', tasks);
+        console.log('All users:', users);
+
+        const groupedTasks = users.map(user => {
+            const userTasks = tasks.filter(task => {
                 if (typeof task.assignedTo === 'string') {
                     return task.assignedTo === user._id;
                 } else if (task.assignedTo && typeof task.assignedTo === 'object' && '_id' in task.assignedTo) {
                     return task.assignedTo._id === user._id;
                 }
                 return false;
-            })
-        }));
+            });
+            console.log(`Tasks for user ${user.username}:`, userTasks);
+            return {
+                user,
+                tasks: userTasks
+            };
+        });
 
         const unassignedTasks = tasks.filter(task => !task.assignedTo);
         if (unassignedTasks.length > 0) {
+            console.log('Unassigned tasks:', unassignedTasks);
             groupedTasks.push({
                 user: { _id: 'unassigned', username: 'Não atribuído' } as User,
                 tasks: unassignedTasks
             });
         }
 
+        console.log('Final grouped tasks:', groupedTasks);
         return groupedTasks;
     };
 
-    const renderTaskList = () => (
-        <Box sx={{ display: 'flex', overflowX: 'auto', flexGrow: 1, p: 2 }}>
-            {groupTasksByUser(tasks, users).map(({ user, tasks }) => (
-                <UserTaskColumn
-                    key={user._id}
-                    user={user}
-                    tasks={tasks}
-                    onTaskClick={handleTaskClick}
-                />
+
+    const renderTaskList = () => {
+        console.log('Renderizando lista de tarefas');
+        console.log('Tasks:', tasks);
+        console.log('Users:', users);
+
+        console.log('Tasks with colors:', tasks.map(task => ({
+            title: task.title,
+            color: task.color
+        })));
+
+        const groupedTasks = groupTasksByUser(tasks, users);
+        console.log('Grouped Tasks:', groupedTasks);
+
+        return (
+            <Box sx={{ display: 'flex', overflowX: 'auto', flexGrow: 1, p: 2 }}>
+                {groupedTasks.map(({ user, tasks }) => {
+                    console.log(`Rendering column for ${user.username} with ${tasks.length} tasks`);
+                    return (
+                        <UserTaskColumn
+                            key={user._id}
+                            user={user}
+                            tasks={tasks}
+                            onTaskClick={handleTaskClick}
+                        />
+                    );
+                })}
+            </Box>
+        );
+    };
+
+
+    const renderMissionList = () => (
+        <Grid container spacing={2}>
+            {missions.map(mission => (
+                <Grid item xs={12} sm={6} md={4} key={mission._id}>
+                    <Card
+                        onClick={() => handleMissionClick(mission)}
+                        sx={{
+                            cursor: 'pointer',
+                            '&:hover': {
+                                boxShadow: 6
+                            }
+                        }}
+                    >
+                        <CardContent>
+                            <Typography variant="h6">{mission.title}</Typography>
+                            <Typography color="textSecondary">{mission.description}</Typography>
+                        </CardContent>
+                    </Card>
+                </Grid>
             ))}
-        </Box>
+        </Grid>
     );
 
     if (loading) {
@@ -297,7 +345,7 @@ const TaskMissionManager: React.FC = () => {
                     <>
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
                             <Typography variant="h5">Tarefas</Typography>
-                            <Button variant="contained" color="primary" onClick={() => handleCreateTask()}>
+                            <Button variant="contained" color="primary" onClick={handleCreateTask}>
                                 Criar Tarefa
                             </Button>
                         </Box>
@@ -312,17 +360,7 @@ const TaskMissionManager: React.FC = () => {
                                 Criar Missão
                             </Button>
                         </Box>
-                        <MissionTimeline
-                            missions={missions}
-                            users={users}
-                            onMissionClick={handleMissionClick}
-                            onAddTask={handleCreateTask}
-                            onEditMission={(mission) => {
-                                setSelectedMission(mission);
-                                setModalContent('missionForm');
-                                setIsModalOpen(true);
-                            }}
-                        />
+                        {renderMissionList()}
                     </>
                 )}
             </Box>
@@ -360,14 +398,12 @@ const TaskMissionManager: React.FC = () => {
                         <MissionDetails
                             mission={selectedMission}
                             users={users}
-                            tasks={tasks.filter(task => selectedMission.tasks.includes(task._id))}
+                            onSave={handleSave}
                             onDelete={() => selectedMission._id && handleDelete('mission', selectedMission._id)}
                             onClose={() => setIsModalOpen(false)}
                             onTaskClick={handleTaskClick}
-                            onCreateTask={() => handleCreateTask(selectedMission._id)}
                         />
                     )}
-
                     {modalContent === 'taskForm' && (
                         <TaskForm
                             users={users}
@@ -380,7 +416,6 @@ const TaskMissionManager: React.FC = () => {
                             users={users}
                             onSubmit={handleSave}
                             onClose={() => setIsModalOpen(false)}
-                            initialMission={selectedMission || undefined}
                         />
                     )}
                 </Box>

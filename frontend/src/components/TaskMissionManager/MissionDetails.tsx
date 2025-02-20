@@ -2,166 +2,102 @@ import React, { useState } from 'react';
 import {
     Box,
     Typography,
-    TextField,
     Button,
-    FormControl,
-    InputLabel,
-    Select,
-    MenuItem,
-    Grid,
     Chip,
-    SelectChangeEvent
+    List,
+    ListItem,
+    ListItemText,
+    Dialog,
+    DialogTitle,
+    DialogContent,
 } from '@mui/material';
 import { Mission, User, Task } from '../../types';
+import TaskForm from './TaskForm';
 
 interface MissionDetailsProps {
     mission: Mission;
     users: User[];
-    onSave: (updatedMission: Mission) => void;
+    tasks: Task[];
     onDelete: () => void;
     onClose: () => void;
     onTaskClick: (task: Task) => void;
+    onCreateTask: (task: Omit<Task, '_id'>) => void;
 }
 
 const MissionDetails: React.FC<MissionDetailsProps> = ({
     mission,
     users,
-    onSave,
+    tasks,
     onDelete,
     onClose,
-    onTaskClick
+    onTaskClick,
+    onCreateTask,
 }) => {
-    const [editedMission, setEditedMission] = useState<Mission>(mission);
+    const [isTaskFormOpen, setIsTaskFormOpen] = useState(false);
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement> | SelectChangeEvent<string>) => {
-        const { name, value } = e.target;
-        setEditedMission(prev => ({ ...prev, [name]: value }));
+    const handleCreateTask = (newTask: Omit<Task, '_id'>) => {
+        onCreateTask({ ...newTask, missionId: mission._id });
+        setIsTaskFormOpen(false);
     };
 
-    const handleTeamChange = (event: SelectChangeEvent<string[]>) => {
-        const { value } = event.target;
-        setEditedMission(prev => ({ ...prev, team: typeof value === 'string' ? value.split(',') : value }));
-    };
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        onSave(editedMission);
-    };
+    const missionTasks = tasks.filter(task => task.missionId === mission._id);
 
     return (
-        <Box component="form" onSubmit={handleSubmit} sx={{ mt: 2 }}>
-            <Typography variant="h6" gutterBottom>
-                Detalhes da Missão
+        <Box>
+            <Typography variant="h5" gutterBottom>{mission.title}</Typography>
+            <Typography variant="body1" paragraph>{mission.description}</Typography>
+
+            <Typography variant="subtitle1">Líder:</Typography>
+            <Chip label={users.find(u => u._id === mission.leader)?.username} sx={{ mb: 2 }} />
+
+            <Typography variant="subtitle1">Equipe:</Typography>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
+                {mission.team.map(userId => (
+                    <Chip key={userId} label={users.find(u => u._id === userId)?.username} />
+                ))}
+            </Box>
+
+            <Typography variant="subtitle1">Período:</Typography>
+            <Typography variant="body2" sx={{ mb: 2 }}>
+                {new Date(mission.startDate).toLocaleDateString()} - {new Date(mission.endDate).toLocaleDateString()}
             </Typography>
-            <Grid container spacing={2}>
-                <Grid item xs={12}>
-                    <TextField
-                        fullWidth
-                        label="Título"
-                        name="title"
-                        value={editedMission.title}
-                        onChange={handleChange}
-                    />
-                </Grid>
-                <Grid item xs={12}>
-                    <TextField
-                        fullWidth
-                        label="Descrição"
-                        name="description"
-                        multiline
-                        rows={4}
-                        value={editedMission.description}
-                        onChange={handleChange}
-                    />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                    <FormControl fullWidth>
-                        <InputLabel>Líder</InputLabel>
-                        <Select
-                            name="leader"
-                            value={editedMission.leader}
-                            onChange={handleChange}
-                        >
-                            {users.map(user => (
-                                <MenuItem key={user._id} value={user._id}>{user.username}</MenuItem>
-                            ))}
-                        </Select>
-                    </FormControl>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                    <FormControl fullWidth>
-                        <InputLabel>Equipe</InputLabel>
-                        <Select
-                            multiple
-                            name="team"
-                            value={editedMission.team}
-                            onChange={handleTeamChange}
-                            renderValue={(selected) => (
-                                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                                    {(selected as string[]).map((value) => (
-                                        <Chip key={value} label={users.find(user => user._id === value)?.username} />
-                                    ))}
-                                </Box>
-                            )}
-                        >
-                            {users.map(user => (
-                                <MenuItem key={user._id} value={user._id}>
-                                    {user.username}
-                                </MenuItem>
-                            ))}
-                        </Select>
-                    </FormControl>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                    <TextField
-                        fullWidth
-                        label="Data de Início"
-                        name="startDate"
-                        type="date"
-                        value={editedMission.startDate}
-                        onChange={handleChange}
-                        InputLabelProps={{
-                            shrink: true,
-                        }}
-                    />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                    <TextField
-                        fullWidth
-                        label="Data de Conclusão"
-                        name="endDate"
-                        type="date"
-                        value={editedMission.endDate}
-                        onChange={handleChange}
-                        InputLabelProps={{
-                            shrink: true,
-                        }}
-                    />
-                </Grid>
-            </Grid>
-            <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>
-                Tarefas da Missão
-            </Typography>
-            {editedMission.tasks.map((task: Task) => (
-                <Typography
-                    key={task._id}
-                    onClick={() => onTaskClick(task)}
-                    style={{ cursor: 'pointer' }}
-                >
-                    {task.title} - {task.status}
-                </Typography>
-            ))}
-            <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between' }}>
-                <Button type="submit" variant="contained" color="primary">
-                    Salvar
+
+            <Typography variant="subtitle1">Tarefas:</Typography>
+            <List>
+                {missionTasks.map(task => (
+                    <ListItem
+                        key={task._id}
+                        onClick={() => onTaskClick(task)}
+                        sx={{ cursor: 'pointer' }}
+                    >
+                        <ListItemText primary={task.title} secondary={`Status: ${task.status}`} />
+                    </ListItem>
+                ))}
+            </List>
+
+            <Button onClick={() => setIsTaskFormOpen(true)} variant="outlined" sx={{ mt: 2 }}>
+                Adicionar Tarefa
+            </Button>
+
+            <Box sx={{ mt: 4, display: 'flex', justifyContent: 'space-between' }}>
+                <Button onClick={onDelete} color="error" variant="contained">
+                    Excluir Missão
                 </Button>
-                <Button onClick={onDelete} variant="outlined" color="error">
-                    Excluir
-                </Button>
-                <Button onClick={onClose} variant="outlined">
-                    Cancelar
+                <Button onClick={onClose} variant="contained">
+                    Fechar
                 </Button>
             </Box>
+
+            <Dialog open={isTaskFormOpen} onClose={() => setIsTaskFormOpen(false)}>
+                <DialogTitle>Criar Nova Tarefa</DialogTitle>
+                <DialogContent>
+                    <TaskForm
+                        users={users}
+                        onSubmit={handleCreateTask}
+                        onClose={() => setIsTaskFormOpen(false)}
+                    />
+                </DialogContent>
+            </Dialog>
         </Box>
     );
 };

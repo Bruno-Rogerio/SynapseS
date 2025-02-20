@@ -5,11 +5,9 @@ import connectDB from './config/database';
 import authRoutes from './routes/authRoutes';
 import userRoutes from './routes/userRoutes';
 import inviteRoutes from './routes/inviteRoutes';
-import taskRoutes from './routes/taskRoutes'; // Importando as rotas de tarefas
-import missionRoutes from './routes/missionRoutes'; // Importando as rotas de missões
+import taskRoutes from './routes/taskRoutes';
+import missionRoutes from './routes/missionRoutes';
 import { logEmailStatus } from './utils/emailUtils';
-
-logEmailStatus();
 
 // Carrega as variáveis de ambiente
 dotenv.config();
@@ -17,6 +15,7 @@ dotenv.config();
 // Conecta ao banco de dados
 connectDB();
 
+// Inicializa o app Express
 const app = express();
 const port = process.env.PORT || 5000;
 
@@ -24,24 +23,24 @@ const port = process.env.PORT || 5000;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
 app.use(cors({
   origin: FRONTEND_URL,
-  credentials: true, // Se você estiver usando cookies ou autenticação baseada em sessão
+  credentials: true,
 }));
 
+// Middleware para parsing do corpo das requisições
 app.use(express.json());
 
 // Middleware de log para todas as requisições
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
-  console.log('Headers:', req.headers);
   next();
 });
 
-// Rotas
+// Rotas da API
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/invites', inviteRoutes);
-app.use('/api/tasks', taskRoutes); // Adicionando a rota de tarefas
-app.use('/api/missions', missionRoutes); // Adicionando a rota de missões
+app.use('/api/tasks', taskRoutes);
+app.use('/api/missions', missionRoutes);
 
 // Rota de teste
 app.get('/test', (req, res) => {
@@ -49,15 +48,14 @@ app.get('/test', (req, res) => {
 });
 
 // Tratamento de rotas não encontradas
-app.use((req, res, next) => {
+app.use((req, res) => {
   console.log(`Route not found: ${req.method} ${req.url}`);
   res.status(404).json({ message: 'Route not found' });
 });
 
 // Tratamento global de erros
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error('Global error handler');
-  console.error(err.stack);
+  console.error('Global error handler:', err);
   res.status(500).json({ message: 'Internal server error' });
 });
 
@@ -72,6 +70,9 @@ app.listen(port, () => {
   console.log(' /api/tasks/*');
   console.log(' /api/missions/*');
   console.log(' /test');
+
+  // Log do status do email
+  logEmailStatus();
 });
 
 export default app;

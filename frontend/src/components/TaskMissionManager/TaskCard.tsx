@@ -1,5 +1,5 @@
 import React from 'react';
-import { Card, CardContent, Typography, Chip } from '@mui/material';
+import { Card, CardContent, Typography, Chip, Box } from '@mui/material';
 import { Task } from '../../types';
 
 interface TaskCardProps {
@@ -16,8 +16,22 @@ const colorOptions = {
     amber: '#ffc107',
 };
 
+const translateStatus = (status: 'pending' | 'in_progress' | 'completed'): string => {
+    switch (status) {
+        case 'pending':
+            return 'Pendente';
+        case 'in_progress':
+            return 'Em Progresso';
+        case 'completed':
+            return 'Concluída';
+        default:
+            return status;
+    }
+};
+
 const TaskCard: React.FC<TaskCardProps> = ({ task, onClick }) => {
     const cardColor = task.color && colorOptions[task.color] ? colorOptions[task.color] : colorOptions.teal;
+    const translatedStatus = translateStatus(task.status);
 
     return (
         <Card
@@ -41,15 +55,25 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onClick }) => {
                 <Typography variant="body2" sx={{ mb: 2 }}>
                     {task.description.substring(0, 50)}...
                 </Typography>
-                <Chip
-                    label={task.status}
-                    size="small"
-                    sx={{
-                        backgroundColor: 'rgba(255, 255, 255, 0.2)',
-                        color: 'white',
-                        fontWeight: 'bold'
-                    }}
-                />
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Chip
+                        label={translatedStatus}
+                        size="small"
+                        sx={{
+                            backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                            color: 'white',
+                            fontWeight: 'bold'
+                        }}
+                    />
+                    <Typography variant="caption" sx={{ fontWeight: 'bold' }}>
+                        Pontos: {task.points}
+                    </Typography>
+                </Box>
+                {task.endDate && (
+                    <Typography variant="caption" sx={{ display: 'block', mt: 1, textAlign: 'right' }}>
+                        Prazo: {new Date(task.endDate).toLocaleDateString()}
+                    </Typography>
+                )}
             </CardContent>
         </Card>
     );

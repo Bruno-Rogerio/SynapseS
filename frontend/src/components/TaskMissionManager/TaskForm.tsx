@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     Box,
     Button,
@@ -11,23 +11,18 @@ import {
     Typography
 } from '@mui/material';
 import { Task, User } from '../../types';
+import ColorSelector from './ColorSelector';
 
 interface TaskFormProps {
     users: User[];
     onSubmit: (task: Task) => void;
     onClose: () => void;
+    initialTask?: Task;
+    missionId?: string;
+    missionTitle?: string;
 }
 
-const colorOptions = [
-    { value: 'teal', label: 'Verde Água' },
-    { value: 'cyan', label: 'Ciano' },
-    { value: 'indigo', label: 'Índigo' },
-    { value: 'deepPurple', label: 'Roxo Profundo' },
-    { value: 'pink', label: 'Rosa' },
-    { value: 'amber', label: 'Âmbar' },
-];
-
-const TaskForm: React.FC<TaskFormProps> = ({ users, onSubmit, onClose }) => {
+const TaskForm: React.FC<TaskFormProps> = ({ users, onSubmit, onClose, initialTask, missionId, missionTitle }) => {
     const [newTask, setNewTask] = useState<Task>({
         _id: '',
         title: '',
@@ -41,8 +36,16 @@ const TaskForm: React.FC<TaskFormProps> = ({ users, onSubmit, onClose }) => {
         comments: '',
         attachments: [],
         color: 'teal',
+        missionId: missionId || '',
+        missionTitle: missionTitle || ''
     });
     const [dateError, setDateError] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (initialTask) {
+            setNewTask(initialTask);
+        }
+    }, [initialTask]);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
@@ -70,17 +73,14 @@ const TaskForm: React.FC<TaskFormProps> = ({ users, onSubmit, onClose }) => {
         const selectedDate = new Date(value + 'T00:00:00');
         const startDate = field === 'startDate' ? selectedDate : new Date(newTask.startDate + 'T00:00:00');
         const endDate = field === 'endDate' ? selectedDate : new Date(newTask.endDate + 'T00:00:00');
-
         if (selectedDate < today) {
             setDateError('A data não pode ser anterior a hoje');
             return false;
         }
-
         if (field === 'endDate' && endDate < startDate) {
             setDateError('A data de conclusão não pode ser anterior à data de início');
             return false;
         }
-
         setDateError(null);
         return true;
     };
@@ -95,7 +95,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ users, onSubmit, onClose }) => {
     return (
         <Box>
             <Typography variant="h6" gutterBottom>
-                Nova Tarefa
+                {initialTask ? 'Editar Tarefa' : 'Nova Tarefa'}
             </Typography>
             <form onSubmit={handleSubmit}>
                 <TextField
@@ -166,7 +166,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ users, onSubmit, onClose }) => {
                     <InputLabel>Responsável</InputLabel>
                     <Select
                         name="assignedTo"
-                        value={newTask.assignedTo || ''}
+                        value={typeof newTask.assignedTo === "object" ? newTask.assignedTo._id : newTask.assignedTo || ""}
                         onChange={handleSelectChange}
                         label="Responsável"
                     >
@@ -189,21 +189,11 @@ const TaskForm: React.FC<TaskFormProps> = ({ users, onSubmit, onClose }) => {
                     fullWidth
                     margin="normal"
                 />
-                <FormControl fullWidth margin="normal">
-                    <InputLabel>Cor do Cartão</InputLabel>
-                    <Select
-                        name="color"
-                        value={newTask.color}
-                        onChange={handleSelectChange}
-                        label="Cor do Cartão"
-                    >
-                        {colorOptions.map((option) => (
-                            <MenuItem key={option.value} value={option.value}>
-                                {option.label}
-                            </MenuItem>
-                        ))}
-                    </Select>
-                </FormControl>
+                <ColorSelector
+                    name="color"
+                    value={newTask.color || 'teal'}
+                    onChange={(e) => handleSelectChange(e as SelectChangeEvent<string>)}
+                />
                 <TextField
                     label="Comentários"
                     name="comments"
@@ -239,7 +229,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ users, onSubmit, onClose }) => {
                         Cancelar
                     </Button>
                     <Button type="submit" variant="contained" color="primary">
-                        Criar Tarefa
+                        {initialTask ? 'Salvar Alterações' : 'Criar Tarefa'}
                     </Button>
                 </Box>
             </form>

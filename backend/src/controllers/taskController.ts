@@ -3,8 +3,8 @@ import { Task } from '../models/Task';
 
 export const createTask = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { title, description, status, startDate, endDate, assignedTo, createdBy, points, comments, attachments } = req.body;
-        const task = new Task({ title, description, status, startDate, endDate, assignedTo, createdBy, points, comments, attachments });
+        const { title, description, status, startDate, endDate, assignedTo, createdBy, points, comments, attachments, color } = req.body;
+        const task = new Task({ title, description, status, startDate, endDate, assignedTo, createdBy, points, comments, attachments, color });
         await task.save();
         res.status(201).json({ message: 'Task created successfully', task });
     } catch (error) {
@@ -14,6 +14,7 @@ export const createTask = async (req: Request, res: Response): Promise<void> => 
         });
     }
 };
+
 
 export const getTasks = async (req: Request, res: Response): Promise<void> => {
     try {
@@ -30,7 +31,7 @@ export const getTasks = async (req: Request, res: Response): Promise<void> => {
 export const updateTask = async (req: Request, res: Response): Promise<void> => {
     try {
         const { taskId } = req.params;
-        const task = await Task.findByIdAndUpdate(taskId, req.body, { new: true, runValidators: true });
+        const task = await Task.findByIdAndUpdate(taskId, req.body, { new: true, runValidators: true }).populate('assignedTo', 'username');
         if (!task) {
             res.status(404).json({ message: 'Task not found' });
             return;
@@ -51,7 +52,7 @@ export const updateTaskPartial = async (req: Request, res: Response): Promise<vo
             taskId,
             { $set: req.body },
             { new: true, runValidators: true }
-        );
+        ).populate('assignedTo', 'username');
         if (!task) {
             res.status(404).json({ message: 'Task not found' });
             return;

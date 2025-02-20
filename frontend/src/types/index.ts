@@ -17,11 +17,13 @@ export interface Mission {
     endDate: string;
     leader: string;
     team: string[];
-    category: string;
+    tasks: string[]; // Alterado de Task[] para string[]
     createdBy: string;
-    tasks: Task[];
+    status: 'pending' | 'in_progress' | 'completed';
+    points: number;
     comments: string;
-    attachments: string[]; // Change to string[] to store file URLs
+    attachments: string[];
+    color?: 'teal' | 'cyan' | 'indigo' | 'deepPurple' | 'pink' | 'amber';
 }
 
 export interface Task {
@@ -31,10 +33,12 @@ export interface Task {
     status: 'pending' | 'in_progress' | 'completed';
     startDate: string;
     endDate: string;
-    assignedTo: string;
+    assignedTo: string | { _id: string; /* outras propriedades se necessário */ };
     createdBy: string;
     points: number;
     comments: string;
     attachments: string[];
     color?: 'teal' | 'cyan' | 'indigo' | 'deepPurple' | 'pink' | 'amber';
+    missionId?: string; // Adicione esta linha
+    missionTitle?: string;
 }

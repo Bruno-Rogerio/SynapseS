@@ -24,6 +24,11 @@ const TaskSchema: Schema = new mongoose.Schema({
     points: { type: Number, default: 0 },
     comments: { type: String },
     attachments: [{ type: String }],
+    color: {
+        type: String,
+        enum: ['teal', 'cyan', 'indigo', 'deepPurple', 'pink', 'amber'],
+        default: 'teal'
+    },
 }, { timestamps: true });
 
 export const Task = mongoose.model<ITask>('Task', TaskSchema);

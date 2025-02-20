@@ -11,6 +11,7 @@ import {
     SelectChangeEvent,
 } from '@mui/material';
 import { Task, User } from '../../types';
+import ColorSelector from './ColorSelector';
 
 interface TaskDetailsProps {
     task: Task;
@@ -22,15 +23,6 @@ interface TaskDetailsProps {
     onCommentChange: (comments: string) => void;
     onStatusChange: (status: 'pending' | 'in_progress' | 'completed') => void;
 }
-
-const colorOptions = [
-    { value: 'teal', label: 'Verde Água' },
-    { value: 'cyan', label: 'Ciano' },
-    { value: 'indigo', label: 'Índigo' },
-    { value: 'deepPurple', label: 'Roxo Profundo' },
-    { value: 'pink', label: 'Rosa' },
-    { value: 'amber', label: 'Âmbar' },
-];
 
 const TaskDetails: React.FC<TaskDetailsProps> = ({
     task: initialTask,
@@ -154,7 +146,7 @@ const TaskDetails: React.FC<TaskDetailsProps> = ({
                 <InputLabel>Responsável</InputLabel>
                 <Select
                     name="assignedTo"
-                    value={task.assignedTo}
+                    value={typeof task.assignedTo === 'object' ? task.assignedTo._id : task.assignedTo}
                     onChange={handleSelectChange}
                     label="Responsável"
                 >
@@ -207,21 +199,11 @@ const TaskDetails: React.FC<TaskDetailsProps> = ({
                 onChange={handleChange}
                 margin="normal"
             />
-            <FormControl fullWidth margin="normal">
-                <InputLabel>Cor do Cartão</InputLabel>
-                <Select
-                    name="color"
-                    value={task.color || ''}
-                    onChange={handleSelectChange}
-                    label="Cor do Cartão"
-                >
-                    {colorOptions.map((option) => (
-                        <MenuItem key={option.value} value={option.value}>
-                            {option.label}
-                        </MenuItem>
-                    ))}
-                </Select>
-            </FormControl>
+            <ColorSelector
+                name="color"
+                value={task.color || 'teal'}
+                onChange={(e) => handleSelectChange(e as SelectChangeEvent<string>)}
+            />
             <TextField
                 fullWidth
                 label="Comentários"
