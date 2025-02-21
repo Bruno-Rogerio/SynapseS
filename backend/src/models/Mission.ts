@@ -1,44 +1,73 @@
-import mongoose, { Document, Schema } from 'mongoose';
-
-export interface IMission extends Document {
+export interface Task {
+    id: string;
     title: string;
-    description: string;
-    startDate: Date;
-    endDate: Date;
-    leader: mongoose.Types.ObjectId;
-    team: mongoose.Types.ObjectId[];
-    tasks: mongoose.Types.ObjectId[];
-    createdBy: mongoose.Types.ObjectId;
-    status: 'pending' | 'in_progress' | 'completed';
-    points: number;
-    comments: string;
-    attachments: string[];
-    color?: 'teal' | 'cyan' | 'indigo' | 'deepPurple' | 'pink' | 'amber';
+    status: 'pendente' | 'em-progresso' | 'concluida';
+    assignedTo: string;
 }
 
-const MissionSchema: Schema = new mongoose.Schema({
-    title: { type: String, required: true },
-    description: { type: String, required: true },
-    startDate: { type: Date, required: true },
-    endDate: { type: Date, required: true },
-    leader: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    team: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
-    tasks: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Task' }],
-    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    status: {
-        type: String,
-        enum: ['pending', 'in_progress', 'completed'],
-        default: 'pending',
-        required: true
-    },
-    points: { type: Number, default: 0 },
-    comments: { type: String, default: '' },
-    attachments: [{ type: String }],
-    color: {
-        type: String,
-        enum: ['teal', 'cyan', 'indigo', 'deepPurple', 'pink', 'amber'],
-        default: 'teal'
-    },
-}, { timestamps: true });
+export interface MissionData {
+    id: string;
+    title: string;
+    description: string;
+    leader: string;
+    members: string[];
+    tasks: Task[];
+    startDate: Date;
+    endDate?: Date;
+}
 
-export const Mission = mongoose.model<IMission>('Mission', MissionSchema);
+export class Mission {
+    private data: MissionData;
+
+    constructor(data: MissionData) {
+        this.data = data;
+    }
+
+    get id() {
+        return this.data.id;
+    }
+
+    get title() {
+        return this.data.title;
+    }
+
+    get description() {
+        return this.data.description;
+    }
+
+    get leader() {
+        return this.data.leader;
+    }
+
+    get members() {
+        return this.data.members;
+    }
+
+    get tasks() {
+        return this.data.tasks;
+    }
+
+    addTask(task: Task) {
+        this.data.tasks.push(task);
+    }
+
+    updateTaskStatus(taskId: string, status: 'pendente' | 'em-progresso' | 'concluida') {
+        const task = this.data.tasks.find(t => t.id === taskId);
+        if (task) {
+            task.status = status;
+        }
+    }
+
+    get progress(): number {
+        if (this.data.tasks.length === 0) return 0;
+        const completed = this.data.tasks.filter(t => t.status === 'concluida').length;
+        return Math.round((completed / this.data.tasks.length) * 100);
+    }
+
+    toJSON() {
+        return {
+            ...this.data,
+            progress: this.progress
+        };
+    }
+}

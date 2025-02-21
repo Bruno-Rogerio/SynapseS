@@ -1,28 +1,18 @@
-import express from 'express';
+import { Router } from 'express';
 import {
     createMission,
     getMissions,
     getMissionById,
-    updateMission,
-    deleteMission
+    updateTaskStatus,
+    addTaskToMission
 } from '../controllers/missionController';
-import { authMiddleware } from '../middleware/authMiddleware';
 
-const router = express.Router();
+export const router = Router();
 
-// Create a new mission
-router.post('/', authMiddleware, createMission);
+router.post('/', createMission);
+router.get('/', getMissions);
+router.get('/:id', getMissionById);
+router.put('/:missionId/tasks/:taskId', updateTaskStatus);
+router.post('/:missionId/tasks', addTaskToMission);
 
-// Get all missions for the authenticated user
-router.get('/', authMiddleware, getMissions);
-
-// Get a specific mission by ID
-router.get('/:missionId', authMiddleware, getMissionById);
-
-// Update a specific mission
-router.put('/:missionId', authMiddleware, updateMission);
-
-// Delete a specific mission
-router.delete('/:missionId', authMiddleware, deleteMission);
-
-export default router;
+export default router; // Mantendo a exportação default também

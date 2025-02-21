@@ -1,104 +1,53 @@
-import React, { useState } from 'react';
-import {
-    Box,
-    Typography,
-    Button,
-    Chip,
-    List,
-    ListItem,
-    ListItemText,
-    Dialog,
-    DialogTitle,
-    DialogContent,
-} from '@mui/material';
-import { Mission, User, Task } from '../../types';
-import TaskForm from './TaskForm';
+import React, { useEffect, useState } from 'react';
+import axios from 'axios';
+import MissionTimeline from './MissionTimeline';
 
-interface MissionDetailsProps {
-    mission: Mission;
-    users: User[];
-    tasks: Task[];
-    onDelete: () => void;
-    onClose: () => void;
-    onTaskClick: (task: Task) => void;
-    onCreateTask: (task: Omit<Task, '_id'>) => void;
+interface Task {
+    id: string;
+    title: string;
+    status: 'pendente' | 'em-progresso' | 'concluida';
+    assignedTo: string;
 }
 
-const MissionDetails: React.FC<MissionDetailsProps> = ({
-    mission,
-    users,
-    tasks,
-    onDelete,
-    onClose,
-    onTaskClick,
-    onCreateTask,
-}) => {
-    const [isTaskFormOpen, setIsTaskFormOpen] = useState(false);
+interface Mission {
+    id: string;
+    title: string;
+    description: string;
+    leader: string;
+    members: string[];
+    tasks: Task[];
+    startDate: string;
+    endDate?: string;
+    progress: number;
+}
 
-    const handleCreateTask = (newTask: Omit<Task, '_id'>) => {
-        onCreateTask({ ...newTask, missionId: mission._id });
-        setIsTaskFormOpen(false);
-    };
+interface MissionDetailsProps {
+    missionId: string;
+}
 
-    const missionTasks = tasks.filter(task => task.missionId === mission._id);
+const MissionDetails: React.FC<MissionDetailsProps> = ({ missionId }) => {
+    const [mission, setMission] = useState<Mission | null>(null);
+
+    useEffect(() => {
+        axios.get(`/missions/${missionId}`)
+            .then(response => setMission(response.data))
+            .catch(err => console.error(err));
+    }, [missionId]);
+
+    if (!mission) return <p>Carregando missão...</p>;
 
     return (
-        <Box>
-            <Typography variant="h5" gutterBottom>{mission.title}</Typography>
-            <Typography variant="body1" paragraph>{mission.description}</Typography>
-
-            <Typography variant="subtitle1">Líder:</Typography>
-            <Chip label={users.find(u => u._id === mission.leader)?.username} sx={{ mb: 2 }} />
-
-            <Typography variant="subtitle1">Equipe:</Typography>
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
-                {mission.team.map(userId => (
-                    <Chip key={userId} label={users.find(u => u._id === userId)?.username} />
-                ))}
-            </Box>
-
-            <Typography variant="subtitle1">Período:</Typography>
-            <Typography variant="body2" sx={{ mb: 2 }}>
-                {new Date(mission.startDate).toLocaleDateString()} - {new Date(mission.endDate).toLocaleDateString()}
-            </Typography>
-
-            <Typography variant="subtitle1">Tarefas:</Typography>
-            <List>
-                {missionTasks.map(task => (
-                    <ListItem
-                        key={task._id}
-                        onClick={() => onTaskClick(task)}
-                        sx={{ cursor: 'pointer' }}
-                    >
-                        <ListItemText primary={task.title} secondary={`Status: ${task.status}`} />
-                    </ListItem>
-                ))}
-            </List>
-
-            <Button onClick={() => setIsTaskFormOpen(true)} variant="outlined" sx={{ mt: 2 }}>
-                Adicionar Tarefa
-            </Button>
-
-            <Box sx={{ mt: 4, display: 'flex', justifyContent: 'space-between' }}>
-                <Button onClick={onDelete} color="error" variant="contained">
-                    Excluir Missão
-                </Button>
-                <Button onClick={onClose} variant="contained">
-                    Fechar
-                </Button>
-            </Box>
-
-            <Dialog open={isTaskFormOpen} onClose={() => setIsTaskFormOpen(false)}>
-                <DialogTitle>Criar Nova Tarefa</DialogTitle>
-                <DialogContent>
-                    <TaskForm
-                        users={users}
-                        onSubmit={handleCreateTask}
-                        onClose={() => setIsTaskFormOpen(false)}
-                    />
-                </DialogContent>
-            </Dialog>
-        </Box>
+        <div>
+            <h2>{mission.title}</h2>
+            <p>{mission.description}</p>
+            <p><strong>Líder:</strong> {mission.leader}</p>
+            <div>
+                <label>Progresso:</label>
+                <progress value={mission.progress} max={100}></progress> {mission.progress}%
+            </div>
+            <h3>Tarefas</h3>
+            <MissionTimeline tasks={mission.tasks} />
+        </div>
     );
 };
 

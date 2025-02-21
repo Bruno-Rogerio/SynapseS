@@ -1,144 +1,92 @@
 import { Request, Response } from 'express';
-import { Mission } from '../models/Mission';
+import { Mission, MissionData, Task } from '../models/Mission';
+import { v4 as uuidv4 } from 'uuid';
 
-export const createMission = async (req: Request, res: Response): Promise<void> => {
-    try {
-        console.log('Received mission data:', req.body);
-        const {
-            title,
-            description,
-            startDate,
-            endDate,
-            leader,
-            team,
-            tasks,
-            createdBy,
-            status,
-            points,
-            comments,
-            attachments,
-            color
-        } = req.body;
+const missions: Mission[] = [];
 
-        // Use o ID do usuário autenticado se createdBy não for fornecido
-        const actualCreatedBy = createdBy || req.user?.userId;
+export const createMission = (req: Request, res: Response): void => {
+    const { title, description, leader, members, tasks, startDate, endDate } = req.body;
 
-        if (!actualCreatedBy) {
-            res.status(400).json({
-                message: 'createdBy is required',
-                error: 'User ID is missing'
-            });
-            return;
-        }
-
-        const mission = new Mission({
-            title,
-            description,
-            startDate,
-            endDate,
-            leader,
-            team,
-            tasks,
-            createdBy: actualCreatedBy,
-            status,
-            points,
-            comments,
-            attachments,
-            color
-        });
-
-        const validationError = mission.validateSync();
-        if (validationError) {
-            console.log('Validation error:', validationError);
-            res.status(400).json({
-                message: 'Validation error',
-                error: validationError.message
-            });
-            return;
-        }
-
-        await mission.save();
-        res.status(201).json({ message: 'Mission created successfully', mission });
-    } catch (error) {
-        console.error('Error creating mission:', error);
-        res.status(400).json({
-            message: 'Error creating mission',
-            error: error instanceof Error ? error.message : String(error)
-        });
+    if (!members.includes(leader)) {
+        res.status(400).json({ error: 'O líder deve ser um dos membros da missão.' });
+        return;
     }
+
+    const missionData: MissionData = {
+        id: uuidv4(),
+        title,
+        description,
+        leader,
+        members,
+        tasks: (tasks || []).map((t: any) => ({
+            id: uuidv4(),
+            title: t.title,
+            status: t.status || 'pendente',
+            assignedTo: t.assignedTo
+        })),
+        startDate: new Date(startDate),
+        endDate: endDate ? new Date(endDate) : undefined
+    };
+
+    const mission = new Mission(missionData);
+    missions.push(mission);
+    res.status(201).json(mission.toJSON());
 };
 
-
-export const getMissions = async (req: Request, res: Response): Promise<void> => {
-    try {
-        const missions = await Mission.find({ createdBy: req.user?.userId })
-            .populate('tasks')
-            .populate('leader', 'username')
-            .populate('team', 'username');
-        res.json(missions);
-    } catch (error) {
-        res.status(500).json({
-            message: 'Error fetching missions',
-            error: error instanceof Error ? error.message : String(error)
-        });
-    }
+export const getMissions = (req: Request, res: Response): void => {
+    res.json(missions.map(m => m.toJSON()));
 };
 
-export const updateMission = async (req: Request, res: Response): Promise<void> => {
-    try {
-        const { missionId } = req.params;
-        const mission = await Mission.findByIdAndUpdate(missionId, req.body, { new: true, runValidators: true })
-            .populate('tasks')
-            .populate('leader', 'username')
-            .populate('team', 'username');
-        if (!mission) {
-            res.status(404).json({ message: 'Mission not found' });
-            return;
-        }
-        res.json(mission);
-    } catch (error) {
-        res.status(500).json({
-            message: 'Error updating mission',
-            error: error instanceof Error ? error.message : String(error)
-        });
+export const getMissionById = (req: Request, res: Response): void => {
+    const mission = missions.find(m => m.id === req.params.id);
+    if (!mission) {
+        res.status(404).json({ error: 'Missão não encontrada' });
+        return;
     }
+    res.json(mission.toJSON());
 };
 
-export const deleteMission = async (req: Request, res: Response): Promise<void> => {
-    try {
-        const { missionId } = req.params;
-        const mission = await Mission.findByIdAndDelete(missionId);
-        if (!mission) {
-            res.status(404).json({ message: 'Mission not found' });
-            return;
-        }
-        res.json({ message: 'Mission deleted successfully' });
-    } catch (error) {
-        res.status(500).json({
-            message: 'Error deleting mission',
-            error: error instanceof Error ? error.message : String(error)
-        });
+export const updateTaskStatus = (req: Request, res: Response): void => {
+    const { missionId, taskId } = req.params;
+    const { status, user } = req.body;
+
+    const mission = missions.find(m => m.id === missionId);
+    if (!mission) {
+        res.status(404).json({ error: 'Missão não encontrada' });
+        return;
     }
+
+    if (mission.leader !== user) {
+        res.status(403).json({ error: 'Apenas o líder pode atualizar tarefas.' });
+        return;
+    }
+
+    mission.updateTaskStatus(taskId, status);
+    res.json(mission.toJSON());
 };
 
-export const getMissionById = async (req: Request, res: Response): Promise<void> => {
-    try {
-        const { missionId } = req.params;
-        const mission = await Mission.findById(missionId)
-            .populate('tasks')
-            .populate('leader', 'username')
-            .populate('team', 'username');
+export const addTaskToMission = (req: Request, res: Response): void => {
+    const { missionId } = req.params;
+    const { title, assignedTo, user } = req.body;
 
-        if (!mission) {
-            res.status(404).json({ message: 'Mission not found' });
-            return;
-        }
-
-        res.json(mission);
-    } catch (error) {
-        res.status(500).json({
-            message: 'Error fetching mission',
-            error: error instanceof Error ? error.message : String(error)
-        });
+    const mission = missions.find(m => m.id === missionId);
+    if (!mission) {
+        res.status(404).json({ error: 'Missão não encontrada' });
+        return;
     }
+
+    if (mission.leader !== user) {
+        res.status(403).json({ error: 'Apenas o líder pode adicionar tarefas.' });
+        return;
+    }
+
+    const task: Task = {
+        id: uuidv4(),
+        title,
+        assignedTo,
+        status: 'pendente'
+    };
+
+    mission.addTask(task);
+    res.json(mission.toJSON());
 };
