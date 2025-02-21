@@ -8,6 +8,7 @@ import inviteRoutes from './routes/inviteRoutes';
 import taskRoutes from './routes/taskRoutes';
 import missionRoutes from './routes/missionRoutes';
 import { logEmailStatus } from './utils/emailUtils';
+import chatRoutes from './routes/chatRoutes';
 
 // Carrega as variáveis de ambiente
 dotenv.config();
@@ -41,6 +42,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/invites', inviteRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/missions', missionRoutes);
+app.use('/api/chat', chatRoutes);
 
 // Rota de teste
 app.get('/test', (req, res) => {

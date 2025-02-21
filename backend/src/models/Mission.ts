@@ -1,73 +1,60 @@
-export interface Task {
+import mongoose, { Document, Schema } from 'mongoose';
+import { v4 as uuidv4 } from 'uuid';
+
+export interface ITask {
     id: string;
     title: string;
     status: 'pendente' | 'em-progresso' | 'concluida';
     assignedTo: string;
 }
 
-export interface MissionData {
-    id: string;
+export interface IMission extends Document {
     title: string;
     description: string;
     leader: string;
     members: string[];
-    tasks: Task[];
+    tasks: ITask[];
     startDate: Date;
     endDate?: Date;
+    progress: number;
 }
 
-export class Mission {
-    private data: MissionData;
+const TaskSchema: Schema = new Schema({
+    id: { type: String, required: true, default: uuidv4 },
+    title: { type: String, required: true },
+    status: {
+        type: String,
+        enum: ['pendente', 'em-progresso', 'concluida'],
+        default: 'pendente'
+    },
+    assignedTo: { type: String, required: true }
+});
 
-    constructor(data: MissionData) {
-        this.data = data;
+const MissionSchema: Schema = new Schema(
+    {
+        title: { type: String, required: true },
+        description: { type: String, required: true },
+        leader: { type: String, required: true },
+        members: [{ type: String, required: true }],
+        tasks: [TaskSchema],
+        startDate: { type: Date, required: true },
+        endDate: { type: Date }
+    },
+    {
+        timestamps: true
     }
+);
 
-    get id() {
-        return this.data.id;
-    }
+// Campo virtual para cálculo de progresso
+MissionSchema.virtual('progress').get(function (this: IMission) {
+    if (!this.tasks || this.tasks.length === 0) return 0;
+    const completed = this.tasks.filter(task => task.status === 'concluida').length;
+    return Math.round((completed / this.tasks.length) * 100);
+});
 
-    get title() {
-        return this.data.title;
-    }
+// Configura para que os campos virtuais apareçam na serialização
+MissionSchema.set('toJSON', { virtuals: true });
+MissionSchema.set('toObject', { virtuals: true });
 
-    get description() {
-        return this.data.description;
-    }
-
-    get leader() {
-        return this.data.leader;
-    }
-
-    get members() {
-        return this.data.members;
-    }
-
-    get tasks() {
-        return this.data.tasks;
-    }
-
-    addTask(task: Task) {
-        this.data.tasks.push(task);
-    }
-
-    updateTaskStatus(taskId: string, status: 'pendente' | 'em-progresso' | 'concluida') {
-        const task = this.data.tasks.find(t => t.id === taskId);
-        if (task) {
-            task.status = status;
-        }
-    }
-
-    get progress(): number {
-        if (this.data.tasks.length === 0) return 0;
-        const completed = this.data.tasks.filter(t => t.status === 'concluida').length;
-        return Math.round((completed / this.data.tasks.length) * 100);
-    }
-
-    toJSON() {
-        return {
-            ...this.data,
-            progress: this.progress
-        };
-    }
-}
+const Mission = mongoose.model<IMission>('Mission', MissionSchema);
+export default Mission;

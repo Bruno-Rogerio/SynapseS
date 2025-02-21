@@ -42,3 +42,24 @@ export interface Task {
     missionId?: string; // Adicione esta linha
     missionTitle?: string;
 }
+
+export interface ChatMessage {
+    _id: string;
+    missionId: string;
+    userId: string;
+    username: string;
+    message: string;
+    fileUrl?: string;
+    reactions: Record<string, number>;
+    createdAt: string;
+    replyTo?: ReplyTo;
+}
+
+export interface ReplyTo {
+    messageId: string;
+    userId: string;
+    username: string;
+    message: string;
+}
+
+

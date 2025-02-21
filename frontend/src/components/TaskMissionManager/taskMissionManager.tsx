@@ -1,3 +1,4 @@
+// frontend/src/components/TaskMissionManager/TaskMissionManager.tsx
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import {
@@ -19,7 +20,7 @@ import TaskDetails from './TaskDetails';
 import MissionForm from './MissionForm';
 import TaskForm from './TaskForm';
 import UserTaskColumn from './UserTaskColumn';
-import MissionTimeline from './MissionTimeline';
+import MissionTimelineCard from './MissionTimelineCard'; // Novo componente para cada missão
 import { Mission, Task, User } from '../../types';
 
 const API_BASE_URL = config.API_BASE_URL;
@@ -76,7 +77,7 @@ const TaskMissionManager: React.FC = () => {
             setError('Erro ao carregar missões');
         }
     };
-    
+
     const handleTaskClick = (taskOrId: Task | string) => {
         let task: Task | undefined;
         if (typeof taskOrId === 'string') {
@@ -91,18 +92,17 @@ const TaskMissionManager: React.FC = () => {
         }
     };
 
-
     const handleMissionClick = (mission: Mission) => {
         setSelectedMission(mission);
         setModalContent('mission');
         setIsModalOpen(true);
     };
 
+    // Ao criar uma tarefa, se missionId for fornecido, pré-seleciona a missão
     const handleCreateTask = (missionId?: string) => {
         setSelectedTask(null);
         setModalContent('taskForm');
         setIsModalOpen(true);
-        // Se missionId for fornecido, podemos usá-lo para pré-preencher o formulário de tarefa
         if (missionId) {
             const mission = missions.find(m => m._id === missionId);
             if (mission) {
@@ -117,22 +117,45 @@ const TaskMissionManager: React.FC = () => {
         setIsModalOpen(true);
     };
 
-    const handleSave = async (data: Omit<Task | Mission, '_id'> & { _id?: string }) => {
+    /**
+     * handleSave: Se os dados representam uma tarefa (contêm assignedTo),
+     * então é uma tarefa. Se existir data._id, atualiza; caso contrário, cria.
+     * Se data.missionId estiver definido, utiliza o endpoint de missão para criar a tarefa,
+     * e atualiza o array de tarefas da missão com o novo task ID.
+     */
+    const handleSave = async (data: Omit<Task | Mission, '_id'> & { _id?: string; missionId?: string }) => {
         try {
             if ('assignedTo' in data) {
-                // It's a task
+                // É uma tarefa
                 const taskData = {
                     ...data,
                     createdBy: user?._id || '',
                     color: data.color || 'teal',
                     startDate: data.startDate ? new Date(data.startDate).toISOString() : null,
-                    endDate: data.endDate ? new Date(data.endDate).toISOString() : null
+                    endDate: data.endDate ? new Date(data.endDate).toISOString() : null,
                 };
                 let response;
                 if (data._id) {
+                    // Atualização da tarefa
                     response = await axios.put(`${API_BASE_URL}/api/tasks/${data._id}`, taskData);
                 } else {
-                    response = await axios.post(`${API_BASE_URL}/api/tasks`, taskData);
+                    // Criação de nova tarefa
+                    if (data.missionId) {
+                        // Tarefa vinculada à missão
+                        response = await axios.post(`${API_BASE_URL}/api/missions/${data.missionId}/tasks`, taskData);
+                        const updatedTask = response.data.task || response.data;
+                        // Atualiza a missão com o novo task ID
+                        setMissions(prev =>
+                            prev.map(m =>
+                                m._id === data.missionId ? { ...m, tasks: [...m.tasks, updatedTask._id] } : m
+                            )
+                        );
+                        setTasks(prevTasks => [...prevTasks, updatedTask]);
+                    } else {
+                        response = await axios.post(`${API_BASE_URL}/api/tasks`, taskData);
+                        const updatedTask = response.data.task || response.data;
+                        setTasks(prevTasks => [...prevTasks, updatedTask]);
+                    }
                 }
                 const updatedTask = response.data.task || response.data;
                 setTasks(prevTasks =>
@@ -142,7 +165,7 @@ const TaskMissionManager: React.FC = () => {
                 );
                 setSelectedTask(null);
             } else {
-                // It's a mission
+                // É uma missão
                 console.log('Sending mission data:', data);
                 let response;
                 if (data._id) {
@@ -212,6 +235,7 @@ const TaskMissionManager: React.FC = () => {
             updateTaskComment(selectedTask._id, comments);
         }
     };
+
     const handleFileChange = async (files: File[]) => {
         if (selectedTask && selectedTask._id) {
             const formData = new FormData();
@@ -220,9 +244,7 @@ const TaskMissionManager: React.FC = () => {
             });
             try {
                 const response = await axios.post(`${API_BASE_URL}/api/tasks/${selectedTask._id}/attachments`, formData, {
-                    headers: {
-                        'Content-Type': 'multipart/form-data'
-                    }
+                    headers: { 'Content-Type': 'multipart/form-data' },
                 });
                 const updatedTask = { ...selectedTask, attachments: response.data.attachments };
                 await handleSave(updatedTask);
@@ -251,29 +273,23 @@ const TaskMissionManager: React.FC = () => {
                     return task.assignedTo._id === user._id;
                 }
                 return false;
-            })
+            }),
         }));
 
         const unassignedTasks = tasks.filter(task => !task.assignedTo);
         if (unassignedTasks.length > 0) {
             groupedTasks.push({
                 user: { _id: 'unassigned', username: 'Não atribuído' } as User,
-                tasks: unassignedTasks
+                tasks: unassignedTasks,
             });
         }
-
         return groupedTasks;
     };
 
     const renderTaskList = () => (
         <Box sx={{ display: 'flex', overflowX: 'auto', flexGrow: 1, p: 2 }}>
             {groupTasksByUser(tasks, users).map(({ user, tasks }) => (
-                <UserTaskColumn
-                    key={user._id}
-                    user={user}
-                    tasks={tasks}
-                    onTaskClick={handleTaskClick}
-                />
+                <UserTaskColumn key={user._id} user={user} tasks={tasks} onTaskClick={handleTaskClick} />
             ))}
         </Box>
     );
@@ -312,17 +328,26 @@ const TaskMissionManager: React.FC = () => {
                                 Criar Missão
                             </Button>
                         </Box>
-                        <MissionTimeline
-                            missions={missions}
-                            users={users}
-                            onMissionClick={handleMissionClick}
-                            onAddTask={handleCreateTask}
-                            onEditMission={(mission) => {
-                                setSelectedMission(mission);
-                                setModalContent('missionForm');
-                                setIsModalOpen(true);
-                            }}
-                        />
+                        {/* Para cada missão, renderizamos um MissionTimelineCard */}
+                        <Box sx={{ overflowY: 'auto', maxHeight: 'calc(100vh - 200px)' }}>
+                            {missions.map(mission => (
+                                <Box key={mission._id} sx={{ mb: 2 }}>
+                                    <MissionTimelineCard
+                                        mission={mission}
+                                        tasks={tasks}
+                                        users={users}
+                                        onEditMission={(mission) => {
+                                            setSelectedMission(mission);
+                                            setModalContent('missionForm');
+                                            setIsModalOpen(true);
+                                        }}
+                                        onDeleteMission={(missionId) => handleDelete('mission', missionId)}
+                                        onAddTask={(missionId) => handleCreateTask(missionId)}
+                                        onTaskClick={(task) => handleTaskClick(task)}
+                                    />
+                                </Box>
+                            ))}
+                        </Box>
                     </>
                 )}
             </Box>
@@ -331,19 +356,21 @@ const TaskMissionManager: React.FC = () => {
                 onClose={() => setIsModalOpen(false)}
                 aria-labelledby="modal-title"
             >
-                <Box sx={{
-                    position: 'absolute',
-                    top: '50%',
-                    left: '50%',
-                    transform: 'translate(-50%, -50%)',
-                    width: '80%',
-                    maxWidth: 600,
-                    maxHeight: '90vh',
-                    bgcolor: 'background.paper',
-                    boxShadow: 24,
-                    p: 4,
-                    overflowY: 'auto'
-                }}>
+                <Box
+                    sx={{
+                        position: 'absolute',
+                        top: '50%',
+                        left: '50%',
+                        transform: 'translate(-50%, -50%)',
+                        width: '80%',
+                        maxWidth: 600,
+                        maxHeight: '90vh',
+                        bgcolor: 'background.paper',
+                        boxShadow: 24,
+                        p: 4,
+                        overflowY: 'auto',
+                    }}
+                >
                     {modalContent === 'task' && selectedTask && (
                         <TaskDetails
                             task={selectedTask}
@@ -361,13 +388,15 @@ const TaskMissionManager: React.FC = () => {
                             mission={selectedMission}
                             users={users}
                             tasks={tasks.filter(task => selectedMission.tasks.includes(task._id))}
-                            onDelete={() => selectedMission._id && handleDelete('mission', selectedMission._id)}
+                            onDelete={(missionId) => handleDelete('mission', missionId)}
                             onClose={() => setIsModalOpen(false)}
-                            onTaskClick={handleTaskClick}
-                            onCreateTask={() => handleCreateTask(selectedMission._id)}
+                            onTaskUpdate={handleTaskClick}
+                            onTaskCreate={(newTaskData: Omit<Task, '_id' | 'missionId'>, missionId: string) =>
+                                handleSave({ ...newTaskData, missionId })
+                            }
+                            onEditMission={(mission) => { }}
                         />
                     )}
-
                     {modalContent === 'taskForm' && (
                         <TaskForm
                             users={users}
