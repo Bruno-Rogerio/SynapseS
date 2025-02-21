@@ -26,7 +26,6 @@ const MissionList: React.FC<MissionListProps> = ({
     users,
     tasks,
     onMissionClick,
-    onSave,
     onDelete,
     onTaskClick,
     onCreateTask,

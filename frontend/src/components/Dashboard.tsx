@@ -11,7 +11,7 @@ import {
   FaSignOutAlt
 } from 'react-icons/fa';
 import { useAuth } from '../hooks/useAuth';
-import { Box, Typography, Button } from '@mui/material';
+import { Typography, Button } from '@mui/material';
 import UserManagement from './UserManagement';
 import TaskMissionManager from './TaskMissionManager/taskMissionManager'; // Importando o componente para gerenciar tarefas e missões
 
