@@ -9,6 +9,7 @@ import taskRoutes from './routes/taskRoutes';
 import missionRoutes from './routes/missionRoutes';
 import { logEmailStatus } from './utils/emailUtils';
 import chatRoutes from './routes/chatRoutes';
+import forumRoutes from './routes/forumRoutes';
 
 // Carrega as variáveis de ambiente
 dotenv.config();
@@ -26,6 +27,8 @@ app.use(cors({
   origin: FRONTEND_URL,
   credentials: true,
 }));
+
+app.use('/api/forums', forumRoutes);
 
 // Middleware para parsing do corpo das requisições
 app.use(express.json());
