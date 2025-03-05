@@ -11,9 +11,10 @@ import {
   FaSignOutAlt
 } from 'react-icons/fa';
 import { useAuth } from '../hooks/useAuth';
-import { Typography, Button } from '@mui/material';
+import { Typography, Button, Box } from '@mui/material';
 import UserManagement from './UserManagement';
-import TaskMissionManager from './TaskMissionManager/taskMissionManager'; // Importando o componente para gerenciar tarefas e missões
+import TaskMissionManager from './TaskMissionManager/taskMissionManager';
+import ForumList from './ForumList'; // Importando o componente ForumList
 
 type MenuItem = {
   name: string;
@@ -49,8 +50,13 @@ const Dashboard: React.FC = () => {
     switch (activeItem) {
       case 'Gestão de Tarefas e Missões':
         return <TaskMissionManager />;
-      case 'Brainstorming': // Exemplo de como adicionar outras seções no futuro
-        return <Typography>Conteúdo da seção Brainstorming vai aqui.</Typography>;
+      case 'Brainstorming':
+        return (
+          <Box>
+            <Typography variant="h5" gutterBottom>Fóruns de Brainstorming</Typography>
+            <ForumList />
+          </Box>
+        );
       case 'Insights e Produtividade':
         return <Typography>Conteúdo da seção Insights e Produtividade vai aqui.</Typography>;
       case 'Indicadores':
@@ -85,7 +91,7 @@ const Dashboard: React.FC = () => {
                 py: 1,
                 color: activeItem === item.name ? 'primary.main' : 'text.primary',
                 bgcolor: activeItem === item.name ? 'action.selected' : 'transparent',
-                textAlign: 'left', // Alinha o texto à esquerda
+                textAlign: 'left',
               }}
             >
               {item.name}
@@ -100,7 +106,7 @@ const Dashboard: React.FC = () => {
               px: 3,
               py: 1,
               color: 'text.primary',
-              textAlign: 'left', // Alinha o texto à esquerda
+              textAlign: 'left',
             }}
           >
             Sair

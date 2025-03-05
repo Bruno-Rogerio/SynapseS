@@ -1,251 +1,391 @@
 // frontend/src/components/TaskMissionManager/MissionTimelineCard.tsx
-import React, { useState } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
     Card,
+    CardActionArea,
     CardContent,
     Typography,
     Box,
-    Button,
     LinearProgress,
     Chip,
     Avatar,
     Stack,
-    Modal,
+    Tooltip,
+    useTheme,
+    List,
+    ListItem,
+    ListItemText,
+    ListItemIcon,
 } from '@mui/material';
-import { Mission, Task, User } from '../../types';
-import { format } from 'date-fns';
-import MissionChat from './MissionChat';
+import { Mission, Checkpoint, User } from '../../types';
+import { format, differenceInDays, isSameDay, startOfMonth, endOfMonth, addMonths } from 'date-fns';
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import GroupIcon from '@mui/icons-material/Group';
+import FlagIcon from '@mui/icons-material/Flag';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import ScheduleIcon from '@mui/icons-material/Schedule';
+import PendingIcon from '@mui/icons-material/Pending';
+
+type CheckpointStatus = 'pending' | 'in_progress' | 'completed' | 'pendente' | 'em-progresso' | 'concluida' | 'concluída';
+type MissionStatus = 'pending' | 'in_progress' | 'completed' | 'pendente' | 'em-progresso' | 'concluida' | 'concluída';
+
+const formatMonthYear = (date: Date): string => {
+    const months = [
+        'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+        'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+    ];
+    return `${months[date.getMonth()]} ${date.getFullYear()}`;
+};
+
+const eachMonthOfInterval = (start: Date, end: Date): Date[] => {
+    const months: Date[] = [];
+    let currentDate = new Date(start);
+    while (currentDate <= end) {
+        months.push(new Date(currentDate));
+        currentDate = addMonths(currentDate, 1);
+    }
+    return months;
+};
+
+const isCheckpointCompleted = (status: CheckpointStatus): boolean => {
+    return ['completed', 'concluida', 'concluída'].includes(status);
+};
+
+const getStatusForCard = (status: MissionStatus): "pendente" | "em-progresso" | "concluida" => {
+    switch (status) {
+        case "pending":
+        case "pendente":
+            return "pendente";
+        case "in_progress":
+        case "em-progresso":
+            return "em-progresso";
+        case "completed":
+        case "concluida":
+        case "concluída":
+            return "concluida";
+        default:
+            return "pendente";
+    }
+};
+
+const statusColors: Record<"pendente" | "em-progresso" | "concluida", string> = {
+    pendente: '#FF6666',
+    'em-progresso': '#00AFF0',
+    concluida: '#1DB954',
+};
+
+const statusBackgroundColors: Record<"pendente" | "em-progresso" | "concluida", string> = {
+    pendente: 'rgba(255, 102, 102, 0.15)',
+    'em-progresso': 'rgba(0, 175, 240, 0.15)',
+    concluida: 'rgba(29, 185, 84, 0.15)',
+};
+
+const statusLabels: Record<"pendente" | "em-progresso" | "concluida", string> = {
+    pendente: 'Pendente',
+    'em-progresso': 'Em Progresso',
+    concluida: 'Concluída',
+};
+
+const statusIcons: Record<"pendente" | "em-progresso" | "concluida", React.ReactElement> = {
+    pendente: <PendingIcon />,
+    'em-progresso': <ScheduleIcon />,
+    concluida: <CheckCircleIcon />,
+};
 
 interface MissionTimelineCardProps {
     mission: Mission;
-    tasks: Task[]; // Tarefas detalhadas vinculadas à missão
     users: User[];
     onEditMission: (mission: Mission) => void;
-    onDeleteMission: (missionId: string) => void;
-    onAddTask: (missionId: string) => void;
-    onTaskClick: (task: Task) => void;
 }
 
-const statusColors: Record<Mission['status'], string> = {
-    pending: 'rgba(255, 102, 102, 0.15)',
-    in_progress: 'rgba(0, 175, 240, 0.15)',
-    completed: 'rgba(29, 185, 84, 0.15)',
+const eachDayOfInterval = ({ start, end }: { start: Date; end: Date }): Date[] => {
+    const days: Date[] = [];
+    let currentDay = new Date(start);
+    while (currentDay <= end) {
+        days.push(new Date(currentDay));
+        currentDay.setDate(currentDay.getDate() + 1);
+    }
+    return days;
+};
+
+const isWithinInterval = (date: Date, { start, end }: { start: Date; end: Date }): boolean => {
+    return date >= start && date <= end;
 };
 
 const MissionTimelineCard: React.FC<MissionTimelineCardProps> = ({
     mission,
-    tasks,
     users,
     onEditMission,
-    onDeleteMission,
-    onAddTask,
-    onTaskClick,
 }) => {
-    const [chatOpen, setChatOpen] = useState(false);
+    const theme = useTheme();
+    const [currentMonth, setCurrentMonth] = useState<Date>(new Date(mission.startDate));
+    const calendarRef = useRef<HTMLDivElement>(null);
+    const missionCheckpoints: Checkpoint[] = mission.checkpoints || [];
+    const progress = useMemo(() =>
+        missionCheckpoints.length > 0
+            ? Math.round(
+                (missionCheckpoints.filter(cp => isCheckpointCompleted(cp.status as CheckpointStatus)).length /
+                    missionCheckpoints.length) *
+                100
+            )
+            : 0
+        , [missionCheckpoints]);
 
-    // Filtra as tarefas vinculadas à missão
-    const missionTasks = tasks.filter(task => task.missionId === mission._id);
-    const progress =
-        missionTasks.length > 0
-            ? Math.round((missionTasks.filter(task => task.status === 'completed').length / missionTasks.length) * 100)
-            : 0;
+    const missionStatus = getStatusForCard(mission.status as MissionStatus);
+    const missionStart = new Date(mission.startDate);
+    const missionEnd = new Date(mission.endDate);
+    const daysLeft = differenceInDays(missionEnd, new Date());
 
-    // Configurações da timeline
-    const timelineWidth = 320; // Largura ajustada para um layout compacto
-    const taskCount = missionTasks.length;
-    const taskPositions = missionTasks.map((task, index) => {
-        const left = taskCount > 1 ? (index / (taskCount - 1)) * timelineWidth : timelineWidth / 2;
-        return { ...task, left };
-    });
+    const getResponsibleInitial = (userId: string | undefined) => {
+        if (!userId) return '?';
+        const user = users.find(u => u._id === userId);
+        return user ? user.username.charAt(0).toUpperCase() : '?';
+    };
+
+    const sortedCheckpoints = useMemo(() =>
+        [...missionCheckpoints].sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
+        , [missionCheckpoints]);
+
+    useEffect(() => {
+        const handleScroll = () => {
+            if (calendarRef.current) {
+                const { scrollTop, scrollHeight, clientHeight } = calendarRef.current;
+                const scrollPercentage = scrollTop / (scrollHeight - clientHeight);
+                const totalMonths = differenceInDays(missionEnd, missionStart) / 30;
+                const currentMonthIndex = Math.floor(scrollPercentage * totalMonths);
+                const newCurrentMonth = addMonths(missionStart, currentMonthIndex);
+                setCurrentMonth(newCurrentMonth);
+            }
+        };
+
+        const calendarElement = calendarRef.current;
+        if (calendarElement) {
+            calendarElement.addEventListener('scroll', handleScroll);
+        }
+
+        return () => {
+            if (calendarElement) {
+                calendarElement.removeEventListener('scroll', handleScroll);
+            }
+        };
+    }, [missionStart, missionEnd]);
+
+    const renderMiniCalendar = () => {
+        const months = eachMonthOfInterval(missionStart, missionEnd);
+        return (
+            <Box>
+                <Typography variant="subtitle1" align="center" sx={{ mb: 1, position: 'sticky', top: 0, bgcolor: 'background.paper', zIndex: 1 }}>
+                    {formatMonthYear(currentMonth)}
+                </Typography>
+                <Box
+                    ref={calendarRef}
+                    sx={{
+                        maxHeight: 300,
+                        overflowY: 'auto',
+                        '&::-webkit-scrollbar': {
+                            width: '8px',
+                        },
+                        '&::-webkit-scrollbar-track': {
+                            backgroundColor: 'rgba(0,0,0,0.1)',
+                        },
+                        '&::-webkit-scrollbar-thumb': {
+                            backgroundColor: 'rgba(0,0,0,0.3)',
+                            borderRadius: '4px',
+                        },
+                    }}
+                >
+                    {months.map((month: Date, monthIndex: number) => (
+                        <Box key={monthIndex}>
+                            <Typography variant="subtitle2" sx={{ mt: 1, mb: 0.5 }}>
+                                {formatMonthYear(month)}
+                            </Typography>
+                            <Box
+                                sx={{
+                                    display: 'grid',
+                                    gridTemplateColumns: 'repeat(7, 1fr)',
+                                    gap: 0.5,
+                                    p: 1,
+                                }}
+                            >
+                                {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((day, index) => (
+                                    <Typography key={index} variant="caption" align="center">{day}</Typography>
+                                ))}
+                                {eachDayOfInterval({ start: startOfMonth(month), end: endOfMonth(month) }).map((day: Date) => {
+                                    const isInMission = isWithinInterval(day, { start: missionStart, end: missionEnd });
+                                    const checkpoints = sortedCheckpoints.filter(cp => isSameDay(new Date(cp.dueDate), day));
+                                    return (
+                                        <Tooltip
+                                            key={day.getTime()}
+                                            title={checkpoints.length > 0 ? `${checkpoints.length} checkpoint(s)` : ''}
+                                            arrow
+                                        >
+                                            <Box
+                                                sx={{
+                                                    width: 24,
+                                                    height: 24,
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    borderRadius: '50%',
+                                                    bgcolor: isInMission ? (checkpoints.length > 0 ? statusColors[getStatusForCard(checkpoints[0].status as MissionStatus)] : 'transparent') : 'transparent',
+                                                    border: isInMission ? `1px solid ${theme.palette.divider}` : 'none',
+                                                    color: isInMission ? (checkpoints.length > 0 ? 'white' : 'inherit') : theme.palette.text.disabled,
+                                                    position: 'relative',
+                                                }}
+                                            >
+                                                <Typography variant="caption">{format(day, 'd')}</Typography>
+                                                {checkpoints.length > 1 && (
+                                                    <Box
+                                                        sx={{
+                                                            position: 'absolute',
+                                                            top: -2,
+                                                            right: -2,
+                                                            width: 12,
+                                                            height: 12,
+                                                            borderRadius: '50%',
+                                                            bgcolor: theme.palette.error.main,
+                                                            color: 'white',
+                                                            fontSize: '0.6rem',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                        }}
+                                                    >
+                                                        {checkpoints.length}
+                                                    </Box>
+                                                )}
+                                            </Box>
+                                        </Tooltip>
+                                    );
+                                })}
+                            </Box>
+                        </Box>
+                    ))}
+                </Box>
+            </Box>
+        );
+    };
+
+    const renderCheckpointList = () => (
+        <List sx={{ maxHeight: 300, overflow: 'auto' }}>
+            {sortedCheckpoints.map((checkpoint) => (
+                <ListItem key={checkpoint.id}>
+                    <ListItemIcon>
+                        {statusIcons[getStatusForCard(checkpoint.status as MissionStatus)]}
+                    </ListItemIcon>
+                    <ListItemText
+                        primary={checkpoint.title}
+                        secondary={`${format(new Date(checkpoint.dueDate), 'dd/MM/yyyy')} - ${statusLabels[getStatusForCard(checkpoint.status as MissionStatus)]}`}
+                    />
+                </ListItem>
+            ))}
+        </List>
+    );
 
     return (
-        <>
-            <Card
-                sx={{
-                    mb: 2,
-                    mr: 2,
-                    borderRadius: 2,
-                    boxShadow: 3,
-                    bgcolor: 'grey.50',
-                    borderLeft: `5px solid ${statusColors[mission.status]}`,
-                }}
-            >
-                <CardContent sx={{ p: 1 }}>
-                    <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1}>
-                        <Typography variant="h6" noWrap sx={{ fontWeight: 600 }}>
+        <Card
+            sx={{
+                mb: 3,
+                borderRadius: 2,
+                boxShadow: 3,
+                overflow: 'hidden',
+                position: 'relative',
+                transition: 'all 0.3s ease-in-out',
+                '&:hover': {
+                    transform: 'translateY(-5px)',
+                    boxShadow: 6,
+                },
+            }}
+        >
+            <CardActionArea onClick={() => onEditMission(mission)}>
+                <Box sx={{ height: 8, bgcolor: statusBackgroundColors[missionStatus] }} />
+                <CardContent sx={{ p: 2 }}>
+                    <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={2} sx={{ mb: 2 }}>
+                        <Typography variant="h6" sx={{ fontWeight: 600 }}>
                             {mission.title}
                         </Typography>
                         <Chip
-                            label={
-                                mission.status === 'pending'
-                                    ? 'Pendente'
-                                    : mission.status === 'in_progress'
-                                        ? 'Em Progresso'
-                                        : 'Concluída'
-                            }
+                            icon={statusIcons[missionStatus]}
+                            label={statusLabels[missionStatus]}
                             sx={{
-                                bgcolor: statusColors[mission.status],
-                                color: 'black',
+                                bgcolor: statusBackgroundColors[missionStatus],
+                                color: statusColors[missionStatus],
                                 fontWeight: 600,
-                                fontSize: '0.75rem',
-                                height: 24,
+                                '& .MuiChip-icon': {
+                                    color: statusColors[missionStatus],
+                                },
                             }}
                         />
                     </Stack>
-                    <Typography variant="body2" sx={{ mb: 1 }} noWrap>
+                    <Typography variant="body2" sx={{ mb: 2, color: theme.palette.text.secondary }}>
                         {mission.description}
                     </Typography>
-                    <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
-                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                            Líder:
-                        </Typography>
-                        <Typography variant="body2">
-                            {users.find(u => u._id === mission.leader)?.username || 'N/A'}
-                        </Typography>
-                    </Stack>
-                    <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
-                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                            Período:
-                        </Typography>
-                        <Typography variant="body2">
-                            {format(new Date(mission.startDate), 'dd/MM/yyyy')} - {format(new Date(mission.endDate), 'dd/MM/yyyy')}
-                        </Typography>
-                    </Stack>
-                    <Stack direction="row" spacing={1} sx={{ mb: 1, alignItems: 'center' }}>
-                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                            Equipe:
-                        </Typography>
-                        <Stack direction="row" spacing={0.5}>
-                            {mission.team.map(userId => {
-                                const member = users.find(u => u._id === userId);
-                                return (
-                                    <Avatar
-                                        key={userId}
-                                        sx={{ width: 24, height: 24, fontSize: '0.75rem' }}
-                                        title={member?.username || 'N/A'}
-                                    >
-                                        {member?.username ? member.username.charAt(0).toUpperCase() : '?'}
-                                    </Avatar>
-                                );
-                            })}
-                        </Stack>
-                    </Stack>
-                    <Box sx={{ mb: 1 }}>
-                        <LinearProgress variant="determinate" value={progress} sx={{ height: 8, borderRadius: 4 }} />
-                        <Typography variant="caption">{progress}% concluído</Typography>
-                    </Box>
-                    {/* Timeline Horizontal */}
-                    <Box
-                        sx={{
-                            position: 'relative',
-                            width: timelineWidth,
-                            height: 50,
-                            mx: 'auto',
-                            mt: 2,
-                            borderTop: '1px solid #ccc',
-                        }}
-                    >
-                        {taskPositions.map(task => (
-                            <Box
-                                key={task._id}
-                                sx={{
-                                    position: 'absolute',
-                                    top: -8,
-                                    left: task.left,
-                                    transform: 'translateX(-50%)',
-                                    width: 24,
-                                    height: 24,
-                                    borderRadius: '50%',
-                                    bgcolor:
-                                        task.status === 'pending'
-                                            ? 'rgba(255, 102, 102, 0.15)'
-                                            : task.status === 'in_progress'
-                                                ? 'rgba(0, 175, 240, 0.15)'
-                                                : 'rgba(29, 185, 84, 0.15)',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    cursor: 'pointer',
-                                    boxShadow: 1,
-                                }}
-                                onClick={() => onTaskClick(task)}
-                            >
-                                <Typography variant="caption" sx={{ color: 'black', fontWeight: 600 }}>
-                                    {task.status === 'pending' ? 'P' : task.status === 'in_progress' ? 'IP' : 'C'}
-                                </Typography>
-                            </Box>
-                        ))}
-                        {taskCount === 0 && (
-                            <Typography
-                                variant="caption"
-                                sx={{
-                                    position: 'absolute',
-                                    top: '50%',
-                                    left: '50%',
-                                    transform: 'translate(-50%, -50%)',
-                                }}
-                            >
-                                Sem tarefas
+                    <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
+                        <Tooltip title="Líder da Missão">
+                            <Avatar sx={{ bgcolor: theme.palette.primary.main }}>
+                                {getResponsibleInitial(mission.leader)}
+                            </Avatar>
+                        </Tooltip>
+                        <Box sx={{ flexGrow: 1 }}>
+                            <Typography variant="body2" color="text.secondary">
+                                Líder: {users.find(u => u._id === mission.leader)?.username || 'N/A'}
                             </Typography>
-                        )}
-                        <Button
-                            onClick={() => onAddTask(mission._id)}
-                            variant="contained"
+                            <LinearProgress
+                                variant="determinate"
+                                value={progress}
+                                sx={{
+                                    mt: 1,
+                                    height: 6,
+                                    borderRadius: 3,
+                                    bgcolor: theme.palette.grey[200],
+                                    '& .MuiLinearProgress-bar': {
+                                        borderRadius: 3,
+                                        backgroundColor: statusColors[missionStatus],
+                                    },
+                                }}
+                            />
+                        </Box>
+                        <Typography variant="h6" color={statusColors[missionStatus]}>
+                            {progress}%
+                        </Typography>
+                    </Stack>
+                    <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
+                        <Chip
+                            icon={<AccessTimeIcon />}
+                            label={`${daysLeft} dias restantes`}
+                            variant="outlined"
                             size="small"
-                            sx={{
-                                position: 'absolute',
-                                right: -35,
-                                top: '50%',
-                                transform: 'translateY(-50%)',
-                                minWidth: 'unset',
-                                p: 0.5,
-                            }}
-                        >
-                            +
-                        </Button>
-                    </Box>
-                    {/* Botões de ação */}
-                    <Box sx={{ mt: 1, display: 'flex', justifyContent: 'space-between' }}>
-                        <Button variant="text" onClick={() => onEditMission(mission)} size="small">
-                            Editar
-                        </Button>
-                        <Button variant="text" color="error" onClick={() => onDeleteMission(mission._id)} size="small">
-                            Excluir
-                        </Button>
-                        <Button variant="text" onClick={() => setChatOpen(true)} size="small">
-                            Comentar
-                        </Button>
-                    </Box>
+                        />
+                        <Chip
+                            icon={<GroupIcon />}
+                            label={`${mission.members?.length || 0} membros`}
+                            variant="outlined"
+                            size="small"
+                        />
+                        <Chip
+                            icon={<FlagIcon />}
+                            label={`${missionCheckpoints.length} checkpoints`}
+                            variant="outlined"
+                            size="small"
+                        />
+                    </Stack>
+                    <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mt: 2 }}>
+                        <Box sx={{ width: '60%' }}>
+                            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                                Calendário da Missão
+                            </Typography>
+                            {renderMiniCalendar()}
+                        </Box>
+                        <Box sx={{ width: '40%' }}>
+                            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                                Checkpoints
+                            </Typography>
+                            {renderCheckpointList()}
+                        </Box>
+                    </Stack>
                 </CardContent>
-            </Card>
-            {/* Modal de chat */}
-            <Modal open={chatOpen} onClose={() => setChatOpen(false)}>
-                <Box
-                    sx={{
-                        position: 'absolute',
-                        top: '50%',
-                        left: '50%',
-                        transform: 'translate(-50%, -50%)',
-                        width: '80%',
-                        maxWidth: 500,
-                        bgcolor: 'background.paper',
-                        p: 2,
-                        borderRadius: 2,
-                        boxShadow: 24,
-                    }}
-                >
-                    <Typography variant="h6" sx={{ mb: 2 }}>
-                        Chat - {mission.title}
-                    </Typography>
-                    <MissionChat missionId={mission._id} />
-                    <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
-                        <Button variant="contained" onClick={() => setChatOpen(false)}>
-                            Fechar
-                        </Button>
-                    </Box>
-                </Box>
-            </Modal>
-        </>
+            </CardActionArea>
+        </Card>
     );
 };
 

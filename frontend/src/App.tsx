@@ -5,8 +5,11 @@ import CssBaseline from '@mui/material/CssBaseline';
 import HomePage from './components/HomePage';
 import Dashboard from './components/Dashboard';
 import AcceptInviteForm from './components/AcceptInviteForm';
-import Tasks from './components/Tasks'; // Importando o componente de tarefas
-import Missions from './components/Missions'; // Importando o componente de missões
+import Tasks from './components/Tasks';
+import Missions from './components/Missions';
+import ForumList from './components/ForumList';
+import ForumDetail from './components/ForumDetail';
+import CreateForumForm from './components/CreateForumForm';
 import { AuthProvider } from './contexts/AuthContext';
 
 const theme = createTheme({
@@ -40,8 +43,13 @@ const App: React.FC = () => {
             <Route path="/" element={<HomePage />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/accept-invite/:token" element={<AcceptInviteForm />} />
-            <Route path="/tasks" element={<Tasks />} /> {/* Adicionando a rota de tarefas */}
-            <Route path="/missions" element={<Missions />} /> {/* Adicionando a rota de missões */}
+            <Route path="/tasks" element={<Tasks />} />
+            <Route path="/missions" element={<Missions />} />
+
+            {/* Novas rotas para o fórum */}
+            <Route path="/forums" element={<ForumList />} />
+            <Route path="/forum/:id" element={<ForumDetail />} />
+            <Route path="/create-forum" element={<CreateForumForm />} />
           </Routes>
         </Router>
       </AuthProvider>

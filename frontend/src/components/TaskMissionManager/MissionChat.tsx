@@ -167,7 +167,7 @@ const MissionChat: React.FC<{ missionId: string }> = ({ missionId }) => {
 
     return (
         <Box sx={{ mt: 2 }}>
-            <Typography variant="h6">Comunicação</Typography>
+            <Typography variant="h6"></Typography>
             <List sx={{ maxHeight: 300, overflowY: 'auto', bgcolor: 'background.paper', p: 1 }}>
                 {messages.map(msg => (
                     <ListItem key={msg._id} alignItems="flex-start" divider>
