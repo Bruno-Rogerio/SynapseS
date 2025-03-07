@@ -53,7 +53,7 @@ const Dashboard: React.FC = () => {
       case 'Brainstorming':
         return (
           <Box>
-            <Typography variant="h5" gutterBottom>Fóruns de Brainstorming</Typography>
+            <Typography variant="h5" gutterBottom></Typography>
             <ForumList />
           </Box>
         );

@@ -9,7 +9,6 @@ import Tasks from './components/Tasks';
 import Missions from './components/Missions';
 import ForumList from './components/ForumList';
 import ForumDetail from './components/ForumDetail';
-import CreateForumForm from './components/CreateForumForm';
 import { AuthProvider } from './contexts/AuthContext';
 
 const theme = createTheme({
@@ -45,11 +44,9 @@ const App: React.FC = () => {
             <Route path="/accept-invite/:token" element={<AcceptInviteForm />} />
             <Route path="/tasks" element={<Tasks />} />
             <Route path="/missions" element={<Missions />} />
-
-            {/* Novas rotas para o fórum */}
+            {/* Rotas para o fórum */}
             <Route path="/forums" element={<ForumList />} />
             <Route path="/forum/:id" element={<ForumDetail />} />
-            <Route path="/create-forum" element={<CreateForumForm />} />
           </Routes>
         </Router>
       </AuthProvider>

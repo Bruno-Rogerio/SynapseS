@@ -1,5 +1,5 @@
 // src/hooks/useForums.ts
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { Forum } from '../types';
 
@@ -10,28 +10,32 @@ export const useForums = () => {
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
 
-    const fetchForums = async (pageNum: number = 1) => {
+    const fetchForums = useCallback(async (pageNum: number = 1) => {
         setLoading(true);
         try {
             const response = await axios.get(`${import.meta.env.VITE_API_BASE_URL}/api/forums`, {
                 params: { page: pageNum, limit: 10 },
+                withCredentials: true, // Importante para enviar cookies de autenticação
             });
-            console.log('API response:', response.data); // Log da resposta
-            setForums(response.data.forums || []);
-            setTotalPages(response.data.totalPages || 1);
+            setForums(response.data.forums);
+            setTotalPages(response.data.totalPages);
             setPage(pageNum);
             setError('');
         } catch (err) {
-            console.error('Error fetching forums:', err);
             setError('Failed to fetch forums');
+            console.error(err);
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
 
     useEffect(() => {
         fetchForums();
-    }, []);
+    }, [fetchForums]);
 
-    return { forums, loading, error, page, totalPages, fetchForums };
+    const refetchForums = useCallback(() => {
+        fetchForums(page);
+    }, [fetchForums, page]);
+
+    return { forums, loading, error, page, totalPages, fetchForums, refetchForums };
 };

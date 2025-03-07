@@ -8,7 +8,7 @@ export interface User {
     role?: 'Admin' | 'Gestor' | 'User';
     inviteStatus?: string;
     fullName?: string;
-    avatar?: string; // Adicionado para compatibilidade com o fórum
+    avatar?: string;
 }
 
 export interface Checkpoint {
@@ -77,7 +77,7 @@ export interface ReplyTo {
     message: string;
 }
 
-// Novos tipos para o fórum
+// Tipos atualizados para o fórum e chat
 export interface Forum {
     _id: string;
     title: string;
@@ -89,31 +89,23 @@ export interface Forum {
     followers: string[];
     isArchived: boolean;
     lastActivity: string;
-    postCount: number;
+    messageCount: number;
     viewCount: number;
     moderators: string[];
 }
 
-export interface ForumPost {
+export interface ForumMessage {
     _id: string;
-    title: string;
     content: string;
     author: User;
     createdAt: string;
     updatedAt: string;
     forum: string; // ID do fórum
-    likes: number;
-    comments: ForumComment[];
-}
-
-export interface ForumComment {
-    _id: string;
-    content: string;
-    author: User;
-    createdAt: string;
-    updatedAt: string;
-    post: string; // ID do post
-    likes: number;
+    replyTo?: string; // ID da mensagem à qual esta está respondendo
+    reactions: {
+        likes: number;
+        dislikes: number;
+    };
 }
 
 export interface NewForum {
@@ -130,13 +122,31 @@ export interface UpdateForum {
     isArchived?: boolean;
 }
 
-export interface NewForumPost {
-    title: string;
+export interface NewForumMessage {
     content: string;
     forum: string; // ID do fórum
+    replyTo?: string; // ID da mensagem à qual esta está respondendo
 }
 
-export interface NewForumComment {
+export interface UpdateForumMessage {
+    _id: string;
     content: string;
-    post: string; // ID do post
 }
+
+export interface ForumReaction {
+    message: string; // ID da mensagem
+    type: 'like' | 'dislike';
+}
+
+// Tipo específico para o estado de digitação
+export interface TypingState {
+    userId: string;
+    username: string;
+}
+
+// Tipo para as mensagens do WebSocket
+export type WebSocketMessage =
+    | { type: 'new_message'; message: ForumMessage }
+    | { type: 'update_message'; message: ForumMessage }
+    | { type: 'delete_message'; messageId: string }
+    | { type: 'typing'; userId: string; username: string };
