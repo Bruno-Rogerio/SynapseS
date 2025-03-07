@@ -1,29 +1,55 @@
 // src/controllers/forumController.ts
 import { Request, Response } from 'express';
-import Forum, { IForum, IPost } from '../models/Forum';
+import Forum, { IForum, IPost, IPostBase } from '../models/Forum';
 import { DecodedToken } from '../middleware/authMiddleware';
-import mongoose from 'mongoose';
+import mongoose, { Types } from 'mongoose';
 
 // Criar um novo fórum
 export const createForum = async (req: Request, res: Response) => {
     try {
+        console.log('Received request to create forum:', req.body);
         const { title, description, tags } = req.body;
+
+        // Verificar se todos os campos necessários estão presentes
+        if (!title || !description) {
+            console.log('Missing required fields');
+            return res.status(400).json({ message: 'Título e descrição são obrigatórios' });
+        }
+
         const user = req.user as DecodedToken;
         if (!user || !user.userId) {
+            console.log('User not authenticated');
             return res.status(401).json({ message: 'Usuário não autenticado' });
         }
+
+        console.log('Creating new forum with user:', user);
         const newForum: IForum = new Forum({
             title,
             description,
-            createdBy: new mongoose.Types.ObjectId(user.userId),
-            tags
+            createdBy: new Types.ObjectId(user.userId),
+            tags: tags || []
         });
+
+        console.log('New forum object:', newForum);
         await newForum.save();
+        console.log('Forum saved successfully');
         res.status(201).json(newForum);
-    } catch (error) {
-        res.status(500).json({ message: 'Erro ao criar fórum', error });
+    } catch (error: unknown) {
+        console.error('Error in createForum:', error);
+        if (error instanceof Error) {
+            res.status(500).json({
+                message: 'Erro ao criar fórum',
+                error: error.message
+            });
+        } else {
+            res.status(500).json({
+                message: 'Erro ao criar fórum',
+                error: 'Erro desconhecido'
+            });
+        }
     }
 };
+
 
 // Obter lista de fóruns
 export const getForums = async (req: Request, res: Response) => {
@@ -78,12 +104,8 @@ export const updateForum = async (req: Request, res: Response) => {
         if (!forum) {
             return res.status(404).json({ message: 'Fórum não encontrado' });
         }
-        if (forum.createdBy instanceof mongoose.Types.ObjectId) {
-            if (forum.createdBy.toString() !== user.userId) {
-                return res.status(403).json({ message: 'Não autorizado a editar este fórum' });
-            }
-        } else {
-            return res.status(500).json({ message: 'Erro na estrutura do fórum' });
+        if (!forum.createdBy.equals(new Types.ObjectId(user.userId))) {
+            return res.status(403).json({ message: 'Não autorizado a editar este fórum' });
         }
         forum.title = title || forum.title;
         forum.description = description || forum.description;
@@ -107,14 +129,10 @@ export const followForum = async (req: Request, res: Response) => {
         if (!forum) {
             return res.status(404).json({ message: 'Fórum não encontrado' });
         }
-        const userId = new mongoose.Types.ObjectId(user.userId);
-        const isFollowing = forum.followers.some((followerId) => {
-            return followerId instanceof mongoose.Types.ObjectId && followerId.equals(userId);
-        });
+        const userId = new Types.ObjectId(user.userId);
+        const isFollowing = forum.followers.some(followerId => followerId.equals(userId));
         if (isFollowing) {
-            forum.followers = forum.followers.filter((followerId) => {
-                return followerId instanceof mongoose.Types.ObjectId && !followerId.equals(userId);
-            });
+            forum.followers = forum.followers.filter(followerId => !followerId.equals(userId));
         } else {
             forum.followers.push(userId);
         }
@@ -151,7 +169,6 @@ export const searchForums = async (req: Request, res: Response) => {
         res.status(500).json({ message: 'Erro ao buscar fóruns', error });
     }
 };
-
 // Deletar um fórum
 export const deleteForum = async (req: Request, res: Response) => {
     try {
@@ -163,12 +180,8 @@ export const deleteForum = async (req: Request, res: Response) => {
         if (!forum) {
             return res.status(404).json({ message: 'Fórum não encontrado' });
         }
-        if (forum.createdBy instanceof mongoose.Types.ObjectId) {
-            if (forum.createdBy.toString() !== user.userId && user.role !== 'admin') {
-                return res.status(403).json({ message: 'Não autorizado a deletar este fórum' });
-            }
-        } else {
-            return res.status(500).json({ message: 'Erro na estrutura do fórum' });
+        if (!forum.createdBy.equals(new Types.ObjectId(user.userId)) && user.role !== 'admin') {
+            return res.status(403).json({ message: 'Não autorizado a deletar este fórum' });
         }
         await Forum.findByIdAndDelete(req.params.id);
         res.json({ message: 'Fórum deletado com sucesso' });
@@ -202,11 +215,10 @@ export const addPostToForum = async (req: Request, res: Response) => {
         if (!forum) {
             return res.status(404).json({ message: 'Fórum não encontrado' });
         }
-        const newPost: IPost = {
-            _id: new mongoose.Types.ObjectId(),
+        const newPost: IPostBase = {
             title,
             content,
-            author: new mongoose.Types.ObjectId(user.userId),
+            author: new Types.ObjectId(user.userId),
             createdAt: new Date(),
             updatedAt: new Date()
         };
@@ -246,12 +258,8 @@ export const archiveForum = async (req: Request, res: Response) => {
         if (!forum) {
             return res.status(404).json({ message: 'Fórum não encontrado' });
         }
-        if (forum.createdBy instanceof mongoose.Types.ObjectId) {
-            if (forum.createdBy.toString() !== user.userId && user.role !== 'admin') {
-                return res.status(403).json({ message: 'Não autorizado a arquivar este fórum' });
-            }
-        } else {
-            return res.status(500).json({ message: 'Erro na estrutura do fórum' });
+        if (!forum.createdBy.equals(new Types.ObjectId(user.userId)) && user.role !== 'admin') {
+            return res.status(403).json({ message: 'Não autorizado a arquivar este fórum' });
         }
         forum.isArchived = !forum.isArchived;
         await forum.save();
@@ -316,13 +324,13 @@ export const manageModerators = async (req: Request, res: Response) => {
         if (!forum) {
             return res.status(404).json({ message: 'Fórum não encontrado' });
         }
-        const moderatorId = new mongoose.Types.ObjectId(userId);
+        const moderatorId = new Types.ObjectId(userId);
         if (action === 'add') {
-            if (!forum.moderators.some((id) => id instanceof mongoose.Types.ObjectId && id.equals(moderatorId))) {
+            if (!forum.moderators.some(id => id.equals(moderatorId))) {
                 forum.moderators.push(moderatorId);
             }
         } else if (action === 'remove') {
-            forum.moderators = forum.moderators.filter((id) => id instanceof mongoose.Types.ObjectId && !id.equals(moderatorId));
+            forum.moderators = forum.moderators.filter(id => !id.equals(moderatorId));
         } else {
             return res.status(400).json({ message: 'Ação inválida' });
         }
@@ -330,5 +338,136 @@ export const manageModerators = async (req: Request, res: Response) => {
         res.json({ message: 'Moderadores atualizados com sucesso', moderators: forum.moderators });
     } catch (error) {
         res.status(500).json({ message: 'Erro ao gerenciar moderadores', error });
+    }
+};
+
+// Atualizar um post
+export const updatePost = async (req: Request, res: Response) => {
+    try {
+        const { title, content } = req.body;
+        const user = req.user as DecodedToken;
+        if (!user || !user.userId) {
+            return res.status(401).json({ message: 'Usuário não autenticado' });
+        }
+        const forum = await Forum.findById(req.params.forumId);
+        if (!forum) {
+            return res.status(404).json({ message: 'Fórum não encontrado' });
+        }
+        const post = forum.posts.id(req.params.postId);
+        if (!post) {
+            return res.status(404).json({ message: 'Post não encontrado' });
+        }
+        if (!post.author.equals(new Types.ObjectId(user.userId)) && user.role !== 'admin') {
+            return res.status(403).json({ message: 'Não autorizado a editar este post' });
+        }
+        post.title = title || post.title;
+        post.content = content || post.content;
+        post.updatedAt = new Date();
+        await forum.save();
+        res.json(post);
+    } catch (error) {
+        res.status(500).json({ message: 'Erro ao atualizar post', error });
+    }
+};
+
+// Deletar um post
+export const deletePost = async (req: Request, res: Response) => {
+    try {
+        const user = req.user as DecodedToken;
+        if (!user || !user.userId) {
+            return res.status(401).json({ message: 'Usuário não autenticado' });
+        }
+        const forum = await Forum.findById(req.params.forumId);
+        if (!forum) {
+            return res.status(404).json({ message: 'Fórum não encontrado' });
+        }
+        const post = forum.posts.id(req.params.postId);
+        if (!post) {
+            return res.status(404).json({ message: 'Post não encontrado' });
+        }
+        if (!post.author.equals(new Types.ObjectId(user.userId)) && user.role !== 'admin') {
+            return res.status(403).json({ message: 'Não autorizado a deletar este post' });
+        }
+        forum.posts.pull(post._id);
+        await forum.save();
+        res.json({ message: 'Post deletado com sucesso' });
+    } catch (error) {
+        res.status(500).json({ message: 'Erro ao deletar post', error });
+    }
+};
+
+// Obter um post específico
+export const getPostById = async (req: Request, res: Response) => {
+    try {
+        const forum = await Forum.findById(req.params.forumId);
+        if (!forum) {
+            return res.status(404).json({ message: 'Fórum não encontrado' });
+        }
+        const post = forum.posts.id(req.params.postId);
+        if (!post) {
+            return res.status(404).json({ message: 'Post não encontrado' });
+        }
+        res.json(post);
+    } catch (error) {
+        res.status(500).json({ message: 'Erro ao buscar post', error });
+    }
+};
+
+// Obter moderadores de um fórum
+export const getForumModerators = async (req: Request, res: Response) => {
+    try {
+        const forum = await Forum.findById(req.params.id).populate('moderators', 'username email');
+        if (!forum) {
+            return res.status(404).json({ message: 'Fórum não encontrado' });
+        }
+        res.json(forum.moderators);
+    } catch (error) {
+        res.status(500).json({ message: 'Erro ao buscar moderadores do fórum', error });
+    }
+};
+
+// Obter fóruns populares
+export const getPopularForums = async (req: Request, res: Response) => {
+    try {
+        const page = parseInt(req.query.page as string) || 1;
+        const limit = parseInt(req.query.limit as string) || 10;
+        const skip = (page - 1) * limit;
+        const forums = await Forum.find({ isArchived: false })
+            .sort({ viewCount: -1, followerCount: -1 })
+            .skip(skip)
+            .limit(limit)
+            .populate('createdBy', 'username');
+        const total = await Forum.countDocuments({ isArchived: false });
+        res.json({
+            forums,
+            currentPage: page,
+            totalPages: Math.ceil(total / limit),
+            totalForums: total
+        });
+    } catch (error) {
+        res.status(500).json({ message: 'Erro ao buscar fóruns populares', error });
+    }
+};
+
+// Obter notificações de um fórum
+export const getForumNotifications = async (req: Request, res: Response) => {
+    try {
+        const user = req.user as DecodedToken;
+        if (!user || !user.userId) {
+            return res.status(401).json({ message: 'Usuário não autenticado' });
+        }
+        // Implementação depende de como você está gerenciando notificações
+        // Este é apenas um exemplo básico
+        const forum = await Forum.findById(req.params.id);
+        if (!forum) {
+            return res.status(404).json({ message: 'Fórum não encontrado' });
+        }
+        // Aqui você buscaria as notificações relacionadas ao fórum para o usuário atual
+        // Por exemplo:
+        // const notifications = await Notification.find({ forum: req.params.id, user: user.userId });
+        // res.json(notifications);
+        res.json({ message: 'Funcionalidade de notificações ainda não implementada' });
+    } catch (error) {
+        res.status(500).json({ message: 'Erro ao buscar notificações do fórum', error });
     }
 };

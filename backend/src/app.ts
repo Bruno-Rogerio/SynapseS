@@ -28,8 +28,6 @@ app.use(cors({
   credentials: true,
 }));
 
-app.use('/api/forums', forumRoutes);
-
 // Middleware para parsing do corpo das requisições
 app.use(express.json());
 
@@ -46,6 +44,8 @@ app.use('/api/invites', inviteRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/missions', missionRoutes);
 app.use('/api/chat', chatRoutes);
+
+app.use('/api/forums', forumRoutes);
 
 // Rota de teste
 app.get('/test', (req, res) => {

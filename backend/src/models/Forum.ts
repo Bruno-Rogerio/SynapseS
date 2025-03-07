@@ -1,40 +1,44 @@
 // src/models/Forum.ts
-import mongoose, { Schema, Document } from 'mongoose';
+import mongoose, { Schema, Document, Types } from 'mongoose';
 import { IUser } from './User';
 
-export interface IPost {
-    _id: mongoose.Types.ObjectId;
+// Separar a interface base do post da interface do documento
+export interface IPostBase {
     title: string;
     content: string;
-    author: IUser['_id'];
+    author: Types.ObjectId;
     createdAt: Date;
     updatedAt: Date;
 }
+
+export interface IPost extends IPostBase, Document { }
 
 export interface IForum extends Document {
     title: string;
     description: string;
-    createdBy: IUser['_id'];
+    createdBy: Types.ObjectId;
     createdAt: Date;
     updatedAt: Date;
     tags: string[];
-    followers: IUser['_id'][];
+    followers: Types.ObjectId[];
     isArchived: boolean;
     lastActivity: Date;
     viewCount: number;
-    posts: IPost[];
-    moderators: IUser['_id'][];
+    posts: Types.DocumentArray<IPost>;
+    moderators: Types.ObjectId[];
+    postCount: number;
+    updateLastActivity: () => Promise<IForum>;
 }
 
-const PostSchema: Schema = new Schema({
+const PostSchema = new Schema({
     title: { type: String, required: true, trim: true },
     content: { type: String, required: true },
     author: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-}, {
-    timestamps: true
+    createdAt: { type: Date, default: Date.now },
+    updatedAt: { type: Date, default: Date.now }
 });
 
-const ForumSchema: Schema = new Schema({
+const ForumSchema = new Schema({
     title: { type: String, required: true, trim: true },
     description: { type: String, required: true },
     createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
