@@ -6,9 +6,10 @@ export interface IUser extends Document {
   email: string;
   password: string;
   fullName: string;
-  role: 'admin' | 'gestor' | 'usuario';
+  role: 'admin' | 'gestor' | 'usuario'; // Ou use 'admin' | 'manager' | 'user' para corresponder ao enum
   company: mongoose.Types.ObjectId;
   inviteStatus: 'pending' | 'accepted' | 'expired';
+  bookmarks: mongoose.Types.ObjectId[]; // Nova propriedade para fóruns favoritos
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
@@ -26,9 +27,10 @@ const UserSchema: Schema = new mongoose.Schema({
   role: { type: String, enum: ['admin', 'manager', 'user'], default: 'user' },
   company: { type: mongoose.Schema.Types.ObjectId, ref: 'Company', required: true },
   inviteStatus: { type: String, enum: ['pending', 'accepted', 'expired'], default: 'pending' },
+  bookmarks: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Forum', default: [] }], // Campo para armazenar favoritos
 }, { timestamps: true });
 
-UserSchema.pre<IUser>('save', async function(next) {
+UserSchema.pre<IUser>('save', async function (next) {
   if (!this.isModified('password')) return next();
   try {
     const salt = await bcrypt.genSalt(10);
@@ -39,11 +41,11 @@ UserSchema.pre<IUser>('save', async function(next) {
   }
 });
 
-UserSchema.methods.comparePassword = async function(candidatePassword: string): Promise<boolean> {
+UserSchema.methods.comparePassword = async function (candidatePassword: string): Promise<boolean> {
   return bcrypt.compare(candidatePassword, this.password);
 };
 
-UserSchema.statics.findByEmail = function(email: string): Promise<IUser | null> {
+UserSchema.statics.findByEmail = function (email: string): Promise<IUser | null> {
   return this.findOne({ email });
 };
 

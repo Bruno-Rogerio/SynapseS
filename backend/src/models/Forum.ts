@@ -2,17 +2,38 @@
 import mongoose, { Schema, Document, Types } from 'mongoose';
 import { IUser } from './User';
 
-// Separar a interface base do post da interface do documento
-export interface IPostBase {
-    title: string;
+// Interfaces para as reações
+export interface ILikedReaction {
+    type: 'like';
+    userId: Types.ObjectId;
+}
+
+export interface IDislikedReaction {
+    type: 'dislike';
+    userId: Types.ObjectId;
+}
+
+export interface ICustomReaction {
+    emoji: string;
+    userId: Types.ObjectId;
+}
+
+// Interface para as mensagens
+export interface IMessage {
+    _id: Types.ObjectId;
     content: string;
     author: Types.ObjectId;
     createdAt: Date;
     updatedAt: Date;
+    reactions: {
+        likes: ILikedReaction[];
+        dislikes: IDislikedReaction[];
+        custom: ICustomReaction[];
+    };
+    replyTo?: Types.ObjectId;
 }
 
-export interface IPost extends IPostBase, Document { }
-
+// Interface para o fórum
 export interface IForum extends Document {
     title: string;
     description: string;
@@ -24,20 +45,39 @@ export interface IForum extends Document {
     isArchived: boolean;
     lastActivity: Date;
     viewCount: number;
-    posts: Types.DocumentArray<IPost>;
+    messages: IMessage[];
     moderators: Types.ObjectId[];
-    postCount: number;
+    messageCount: number;
     updateLastActivity: () => Promise<IForum>;
 }
 
-const PostSchema = new Schema({
-    title: { type: String, required: true, trim: true },
+// Schema para reações de like/dislike
+const ReactionSchema = new Schema({
+    type: { type: String, enum: ['like', 'dislike'], required: true },
+    userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+});
+
+// Schema para reações custom (com emoji)
+const CustomReactionSchema = new Schema({
+    emoji: { type: String, required: true },
+    userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+});
+
+// Schema para mensagens
+const MessageSchema = new Schema({
     content: { type: String, required: true },
     author: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     createdAt: { type: Date, default: Date.now },
-    updatedAt: { type: Date, default: Date.now }
+    updatedAt: { type: Date, default: Date.now },
+    reactions: {
+        likes: { type: [ReactionSchema], default: [] },
+        dislikes: { type: [ReactionSchema], default: [] },
+        custom: { type: [CustomReactionSchema], default: [] },
+    },
+    replyTo: { type: Schema.Types.ObjectId, ref: 'Message' },
 });
 
+// Schema para fórum
 const ForumSchema = new Schema({
     title: { type: String, required: true, trim: true },
     description: { type: String, required: true },
@@ -47,8 +87,9 @@ const ForumSchema = new Schema({
     isArchived: { type: Boolean, default: false },
     lastActivity: { type: Date, default: Date.now },
     viewCount: { type: Number, default: 0 },
-    posts: [PostSchema],
-    moderators: [{ type: Schema.Types.ObjectId, ref: 'User' }]
+    messages: [MessageSchema],
+    moderators: [{ type: Schema.Types.ObjectId, ref: 'User' }],
+    messageCount: { type: Number, default: 0 },
 }, {
     timestamps: true
 });
@@ -59,25 +100,22 @@ ForumSchema.index({ createdBy: 1, lastActivity: -1 });
 ForumSchema.index({ tags: 1 });
 ForumSchema.index({ isArchived: 1 });
 
-// Método virtual para contar posts
-ForumSchema.virtual('postCount').get(function (this: IForum) {
-    return this.posts.length;
-});
-
 // Método para atualizar lastActivity
 ForumSchema.methods.updateLastActivity = function (this: IForum) {
     this.lastActivity = new Date();
     return this.save();
 };
 
-// Middleware para atualizar lastActivity antes de salvar
+// Middleware para atualizar lastActivity e messageCount antes de salvar
 ForumSchema.pre<IForum>('save', function (next) {
-    if (this.isModified('posts')) {
+    if (this.isModified('messages')) {
         this.lastActivity = new Date();
+        this.messageCount = this.messages.length;
     }
     next();
 });
 
 const Forum = mongoose.model<IForum>('Forum', ForumSchema);
 
+export { Forum };
 export default Forum;
