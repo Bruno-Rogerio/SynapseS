@@ -9,6 +9,7 @@ export interface User {
     inviteStatus?: string;
     fullName?: string;
     avatar?: string;
+    token?: string; // Adicionado para autenticação
 }
 
 export interface Checkpoint {
@@ -94,17 +95,31 @@ export interface Forum {
     moderators: string[];
 }
 
+// Define as reações padrão (like e dislike)
+export interface MessageReaction {
+    type: 'like' | 'dislike';
+    userId: string;
+}
+
+// Define a reação personalizada com emoji
+export interface CustomReaction {
+    emoji: string;
+    userId: string;
+}
+
+// Atualize ForumMessage para incluir reações personalizadas
 export interface ForumMessage {
     _id: string;
     content: string;
     author: User;
     createdAt: string;
     updatedAt: string;
-    forum: string; // ID do fórum
+    forum: string; // ID do fórum – obrigatória!
     replyTo?: string; // ID da mensagem à qual esta está respondendo
     reactions: {
-        likes: number;
-        dislikes: number;
+        likes: MessageReaction[];
+        dislikes: MessageReaction[];
+        custom: CustomReaction[];
     };
 }
 
@@ -124,7 +139,7 @@ export interface UpdateForum {
 
 export interface NewForumMessage {
     content: string;
-    forum: string; // ID do fórum
+    forum: string; // ID do fórum – obrigatório
     replyTo?: string; // ID da mensagem à qual esta está respondendo
 }
 
@@ -149,4 +164,14 @@ export type WebSocketMessage =
     | { type: 'new_message'; message: ForumMessage }
     | { type: 'update_message'; message: ForumMessage }
     | { type: 'delete_message'; messageId: string }
-    | { type: 'typing'; userId: string; username: string };
+    | { type: 'typing'; userId: string; username: string }
+    | { type: 'follow_forum'; result: any }
+    | { type: 'update_forum'; forum: Forum }
+    | { type: 'archive_forum'; forum: Forum }
+    | { type: 'update_moderators'; result: any };
+
+export interface WebSocketOptions {
+    token: string;
+}
+
+export type WebSocketCallback = (message: WebSocketMessage) => void;
