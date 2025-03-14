@@ -1,8 +1,9 @@
-// src/hooks/useForumChat.ts
-import { useState, useEffect, useCallback, useMemo } from 'react';
+// src/hooks/useForumChat.ts - versão ajustada para novo padrão WebSocket
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import axios from 'axios';
 import { useWebSocket } from './useWebSocket';
 import { ForumMessage, User, WebSocketMessage } from '../types';
+// import { useAuth } from '../hooks/useAuth'; // Removido, não fornece token diretamente
 
 interface UseForumChatProps {
     forumId: string;
@@ -10,12 +11,16 @@ interface UseForumChatProps {
 }
 
 export const useForumChat = ({ forumId, currentUser }: UseForumChatProps) => {
+    // Obter token do localStorage (alternativa ao contexto de autenticação)
+    const getToken = () => localStorage.getItem('auth_token') || '';
+
     const [messages, setMessages] = useState<ForumMessage[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [isTyping, setIsTyping] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
     const [hasMoreMessages, setHasMoreMessages] = useState(true);
+    const fetchInProgressRef = useRef(false);
 
     const wsUrl = import.meta.env.VITE_WS_URL; // Ex: ws://localhost:5000
     console.log('WebSocket URL:', `${wsUrl}/forum`);
@@ -23,24 +28,43 @@ export const useForumChat = ({ forumId, currentUser }: UseForumChatProps) => {
     // Memoriza o objeto de query para evitar que ele seja recriado a cada renderização
     const query = useMemo(() => ({ forumId }), [forumId]);
 
-    const { isConnected, sendMessage, lastMessage, error: wsError } = useWebSocket<WebSocketMessage>(`${wsUrl}/forum`, {
-        token: currentUser.token || '',
-        query,
-    });
+    // Configuração WebSocket no novo formato
+    const wsOptions = useMemo(() => ({
+        auth: {
+            userId: currentUser._id || '',
+            token: getToken() // Usar função para obter o token
+        },
+        query
+    }), [currentUser._id, query]);
+
+    const { isConnected, sendMessage, lastMessage, error: wsError } = useWebSocket<WebSocketMessage>(
+        `${wsUrl}/forum`,
+        wsOptions
+    );
 
     const fetchMessages = useCallback(async (page = 1) => {
+        // Evitar múltiplas chamadas simultâneas
+        if (fetchInProgressRef.current) {
+            console.log('Fetch already in progress, skipping');
+            return;
+        }
+
         console.log('Fetching messages for page:', page);
+        fetchInProgressRef.current = true;
         setLoading(true);
+
         try {
             const response = await axios.get(`${import.meta.env.VITE_API_BASE_URL}/api/forums/${forumId}/messages`, {
                 params: { page, limit: 50 },
-                headers: { Authorization: `Bearer ${currentUser.token}` },
+                headers: { Authorization: `Bearer ${getToken()}` }, // Usar função para obter o token
             });
+
             console.log('Messages received:', response.data);
             if (page === 1) {
-                setMessages(response.data.messages);
+                setMessages(response.data.messages || []);
             } else {
-                setMessages(prevMessages => [...prevMessages, ...response.data.messages]);
+                // Usar um tipo que abrange ambos os formatos de mensagem
+                setMessages(prevMessages => [...prevMessages, ...(response.data.messages || [])] as ForumMessage[]);
             }
             setCurrentPage(page);
             setHasMoreMessages(page < response.data.totalPages);
@@ -54,14 +78,23 @@ export const useForumChat = ({ forumId, currentUser }: UseForumChatProps) => {
             }
         } finally {
             setLoading(false);
+            fetchInProgressRef.current = false;
         }
-    }, [forumId, currentUser.token]);
+    }, [forumId]);
 
+    // Usar Ref para controlar se já inicializamos
+    const initializedRef = useRef(false);
+
+    // Buscar mensagens iniciais apenas uma vez
     useEffect(() => {
-        console.log('Initial fetch of messages');
-        fetchMessages();
-    }, [fetchMessages]);
+        if (!initializedRef.current && currentUser?._id) {
+            console.log('Initial fetch of messages');
+            initializedRef.current = true;
+            fetchMessages();
+        }
+    }, [fetchMessages, currentUser]);
 
+    // Logar status da conexão WebSocket
     useEffect(() => {
         console.log('WebSocket connection status:', isConnected);
         if (isConnected) {
@@ -71,17 +104,19 @@ export const useForumChat = ({ forumId, currentUser }: UseForumChatProps) => {
         }
     }, [isConnected]);
 
+    // Processar mensagens recebidas
     useEffect(() => {
         if (lastMessage) {
             console.log('WebSocket message received:', lastMessage);
             switch (lastMessage.type) {
                 case 'new_message':
-                    setMessages(prevMessages => [lastMessage.message, ...prevMessages]);
+                    // Usar asserção de tipo para garantir compatibilidade
+                    setMessages(prevMessages => [lastMessage.message as ForumMessage, ...prevMessages]);
                     break;
                 case 'update_message':
                     setMessages(prevMessages =>
                         prevMessages.map(message =>
-                            message._id === lastMessage.message._id ? lastMessage.message : message
+                            message._id === lastMessage.message._id ? lastMessage.message as ForumMessage : message
                         )
                     );
                     break;
@@ -102,6 +137,7 @@ export const useForumChat = ({ forumId, currentUser }: UseForumChatProps) => {
         }
     }, [lastMessage, currentUser._id]);
 
+    // Funções para gerenciar mensagens
     const sendChatMessage = useCallback(async (content: string, replyTo?: string) => {
         console.log('Sending chat message:', { content, replyTo });
         try {
@@ -109,7 +145,7 @@ export const useForumChat = ({ forumId, currentUser }: UseForumChatProps) => {
                 content,
                 replyTo,
             }, {
-                headers: { Authorization: `Bearer ${currentUser.token}` },
+                headers: { Authorization: `Bearer ${getToken()}` }, // Usar função para obter o token
             });
             console.log('Message sent, response:', response.data);
             sendMessage('new_message', { type: 'new_message', message: response.data });
@@ -118,7 +154,7 @@ export const useForumChat = ({ forumId, currentUser }: UseForumChatProps) => {
             console.error('Error sending message:', err);
             throw err;
         }
-    }, [forumId, sendMessage, currentUser.token]);
+    }, [forumId, sendMessage]);
 
     const editChatMessage = useCallback(async (messageId: string, newContent: string) => {
         console.log('Editing chat message:', { messageId, newContent });
@@ -126,7 +162,7 @@ export const useForumChat = ({ forumId, currentUser }: UseForumChatProps) => {
             const response = await axios.put(`${import.meta.env.VITE_API_BASE_URL}/api/forums/${forumId}/messages/${messageId}`, {
                 content: newContent,
             }, {
-                headers: { Authorization: `Bearer ${currentUser.token}` },
+                headers: { Authorization: `Bearer ${getToken()}` }, // Usar função para obter o token
             });
             console.log('Message edited, response:', response.data);
             sendMessage('update_message', { type: 'update_message', message: response.data });
@@ -135,13 +171,13 @@ export const useForumChat = ({ forumId, currentUser }: UseForumChatProps) => {
             console.error('Error editing message:', err);
             throw err;
         }
-    }, [forumId, sendMessage, currentUser.token]);
+    }, [forumId, sendMessage]);
 
     const deleteChatMessage = useCallback(async (messageId: string) => {
         console.log('Deleting chat message:', messageId);
         try {
             await axios.delete(`${import.meta.env.VITE_API_BASE_URL}/api/forums/${forumId}/messages/${messageId}`, {
-                headers: { Authorization: `Bearer ${currentUser.token}` },
+                headers: { Authorization: `Bearer ${getToken()}` }, // Usar função para obter o token
             });
             console.log('Message deleted');
             sendMessage('delete_message', { type: 'delete_message', messageId });
@@ -149,16 +185,15 @@ export const useForumChat = ({ forumId, currentUser }: UseForumChatProps) => {
             console.error('Error deleting message:', err);
             throw err;
         }
-    }, [forumId, sendMessage, currentUser.token]);
+    }, [forumId, sendMessage]);
 
-    // Atualizado para aceitar um parâmetro do tipo string (emoji)
     const reactToChatMessage = useCallback(async (messageId: string, reaction: string): Promise<ForumMessage> => {
         console.log('Reacting to chat message:', { messageId, reaction });
         try {
             const response = await axios.post(`${import.meta.env.VITE_API_BASE_URL}/api/forums/${forumId}/messages/${messageId}/react`, {
                 emoji: reaction,
             }, {
-                headers: { Authorization: `Bearer ${currentUser.token}` },
+                headers: { Authorization: `Bearer ${getToken()}` }, // Usar função para obter o token
             });
             console.log('Reaction sent, response:', response.data);
             sendMessage('update_message', { type: 'update_message', message: response.data });
@@ -167,19 +202,28 @@ export const useForumChat = ({ forumId, currentUser }: UseForumChatProps) => {
             console.error('Error reacting to message:', err);
             throw err;
         }
-    }, [forumId, sendMessage, currentUser.token]);
+    }, [forumId, sendMessage]);
 
     const notifyTyping = useCallback(() => {
         console.log('Notifying typing');
-        sendMessage('typing', { type: 'typing', userId: currentUser._id, username: currentUser.username });
-    }, [sendMessage, currentUser._id, currentUser.username]);
+        if (isConnected) {
+            sendMessage('typing', { type: 'typing', userId: currentUser._id, username: currentUser.username });
+        }
+    }, [sendMessage, currentUser._id, currentUser.username, isConnected]);
 
     const loadMoreMessages = useCallback(() => {
         console.log('Loading more messages');
-        if (hasMoreMessages && !loading) {
+        if (hasMoreMessages && !loading && !fetchInProgressRef.current) {
             fetchMessages(currentPage + 1);
         }
     }, [hasMoreMessages, loading, currentPage, fetchMessages]);
+
+    // Botão manual para reconectar se necessário
+    const reconnect = useCallback(() => {
+        console.log('Manual reconnection triggered');
+        // Esta função seria implementada para forçar uma reconexão
+        // Poderia simplesmente recarregar a página ou usar uma função exposta pelo WebSocket
+    }, []);
 
     console.log('useForumChat state:', {
         messagesCount: messages.length,
@@ -203,5 +247,6 @@ export const useForumChat = ({ forumId, currentUser }: UseForumChatProps) => {
         notifyTyping,
         loadMoreMessages,
         hasMoreMessages,
+        reconnect, // Nova função para reconexão manual
     };
 };

@@ -15,15 +15,11 @@ import {
     Stepper,
     Step,
     StepLabel,
-    StepContent,
     Paper,
     Avatar,
     alpha,
-    Tooltip,
     Autocomplete,
     LinearProgress,
-    Card,
-    CardContent,
     Badge,
     FormControlLabel,
     Switch,
@@ -55,8 +51,8 @@ interface CreateForumFormProps {
 
 // Lista de tags sugeridas para autocompletar
 const SUGGESTED_TAGS = [
-    'Tecnologia', 'Programação', 'Design', 'Marketing', 'Negócios', 
-    'Educação', 'Saúde', 'Esportes', 'Arte', 'Música', 'Cinema', 
+    'Tecnologia', 'Programação', 'Design', 'Marketing', 'Negócios',
+    'Educação', 'Saúde', 'Esportes', 'Arte', 'Música', 'Cinema',
     'Literatura', 'Ciência', 'História', 'Filosofia', 'Política',
     'Desenvolvimento Web', 'Mobile', 'IA', 'Machine Learning', 'UX/UI',
     'React', 'Node.js', 'Python', 'JavaScript', 'Data Science'
@@ -72,7 +68,6 @@ const FORUM_CATEGORIES = [
 const CreateForumForm: React.FC<CreateForumFormProps> = ({ onClose, onForumCreated }) => {
     // Estado dos passos
     const [activeStep, setActiveStep] = useState(0);
-    
     // Estados para o formulário
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
@@ -84,75 +79,62 @@ const CreateForumForm: React.FC<CreateForumFormProps> = ({ onClose, onForumCreat
     const [image, setImage] = useState<string | null>(null);
     const [error, setError] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
-    
     // Estados para feedback de qualidade
     const [titleScore, setTitleScore] = useState(0);
     const [descriptionScore, setDescriptionScore] = useState(0);
     const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
-    
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const { user } = useAuth();
-    
+
     // Cálculo de score baseado na qualidade do título
     useEffect(() => {
         if (!title) {
             setTitleScore(0);
             return;
         }
-        
         let score = 0;
-        
         // Comprimento adequado (entre 10 e 100 caracteres)
         if (title.length >= 10) score += 30;
         if (title.length >= 20) score += 20;
         if (title.length > 100) score -= 20;
-        
         // Tem caracteres especiais ou números (pode indicar mais especificidade)
         if (/[0-9!?]/.test(title)) score += 10;
-        
         // Contém palavras-chave importantes
         const keywords = ['como', 'guia', 'tutorial', 'ajuda', 'dúvida', 'problema'];
         if (keywords.some(keyword => title.toLowerCase().includes(keyword))) {
             score += 15;
         }
-        
         setTitleScore(Math.min(100, score));
     }, [title]);
-    
+
     // Cálculo de score baseado na qualidade da descrição
     useEffect(() => {
         if (!description) {
             setDescriptionScore(0);
             return;
         }
-        
         let score = 0;
-        
         // Comprimento adequado
         if (description.length >= 50) score += 20;
         if (description.length >= 100) score += 20;
         if (description.length >= 200) score += 20;
-        
         // Tem formatação ou estrutura
         if (description.includes('\n')) score += 10;
-        
         // Tem perguntas (engagement)
         if (description.includes('?')) score += 10;
-        
         // Parágrafos bem definidos
         const paragraphs = description.split('\n\n');
         if (paragraphs.length > 1) score += 20;
-        
         setDescriptionScore(Math.min(100, score));
     }, [description]);
-    
+
     const getScoreColor = (score: number) => {
         if (score < 30) return theme.palette.error.main;
         if (score < 60) return theme.palette.warning.main;
         return theme.palette.success.main;
     };
-    
+
     // Manipuladores de tags
     const handleAddTag = () => {
         if (tag && !tags.includes(tag) && tags.length < 8) {
@@ -160,11 +142,11 @@ const CreateForumForm: React.FC<CreateForumFormProps> = ({ onClose, onForumCreat
             setTag('');
         }
     };
-    
+
     const handleDeleteTag = (tagToDelete: string) => {
         setTags(tags.filter((t) => t !== tagToDelete));
     };
-    
+
     // Manipulador de imagem (simulado com uma URL)
     const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -178,24 +160,24 @@ const CreateForumForm: React.FC<CreateForumFormProps> = ({ onClose, onForumCreat
             reader.readAsDataURL(file);
         }
     };
-    
+
     // Navegação entre passos
     const handleNext = () => {
         setActiveStep((prevActiveStep) => prevActiveStep + 1);
     };
-    
+
     const handleBack = () => {
         setActiveStep((prevActiveStep) => prevActiveStep - 1);
     };
-    
+
     // Envio do formulário
     const handleSubmit = async () => {
         setIsSubmitting(true);
         setError('');
-        const forumData = { 
-            title, 
-            description, 
-            tags, 
+        const forumData = {
+            title,
+            description,
+            tags,
             category,
             isPublic,
             enableNotifications,
@@ -203,9 +185,7 @@ const CreateForumForm: React.FC<CreateForumFormProps> = ({ onClose, onForumCreat
             // e salvaria a URL retornada. Aqui estamos apenas indicando que tem uma imagem.
             hasImage: !!image
         };
-        
         console.log('Sending forum data:', forumData);
-        
         try {
             const response = await axios.post(`${import.meta.env.VITE_API_BASE_URL}/api/forums`, forumData, {
                 withCredentials: true
@@ -234,7 +214,7 @@ const CreateForumForm: React.FC<CreateForumFormProps> = ({ onClose, onForumCreat
             setIsSubmitting(false);
         }
     };
-    
+
     // Verificação se pode avançar para o próximo passo
     const canAdvance = () => {
         switch (activeStep) {
@@ -248,15 +228,15 @@ const CreateForumForm: React.FC<CreateForumFormProps> = ({ onClose, onForumCreat
                 return true;
         }
     };
-    
+
     return (
         <Box sx={{ maxWidth: 800, margin: '0 auto' }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-                <Typography 
-                    variant="h5" 
-                    component="h2" 
-                    sx={{ 
-                        fontWeight: 700, 
+                <Typography
+                    variant="h5"
+                    component="h2"
+                    sx={{
+                        fontWeight: 700,
                         background: 'linear-gradient(90deg, #6B73FF 0%, #000DFF 100%)',
                         WebkitBackgroundClip: 'text',
                         WebkitTextFillColor: 'transparent'
@@ -268,9 +248,7 @@ const CreateForumForm: React.FC<CreateForumFormProps> = ({ onClose, onForumCreat
                     <CloseIcon />
                 </IconButton>
             </Box>
-            
             <Divider sx={{ mb: 4 }} />
-            
             {/* Stepper para navegação entre os passos */}
             <Stepper activeStep={activeStep} orientation={isMobile ? "vertical" : "horizontal"} sx={{ mb: 4 }}>
                 <Step>
@@ -286,7 +264,6 @@ const CreateForumForm: React.FC<CreateForumFormProps> = ({ onClose, onForumCreat
                     <StepLabel>Revisão & Criar</StepLabel>
                 </Step>
             </Stepper>
-            
             {/* Conteúdo dinâmico baseado no passo atual */}
             <AnimatePresence mode="wait">
                 <motion.div
@@ -305,7 +282,6 @@ const CreateForumForm: React.FC<CreateForumFormProps> = ({ onClose, onForumCreat
                             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
                                 Escolha um título claro e conciso que descreva o tema do fórum.
                             </Typography>
-                            
                             <TextField
                                 fullWidth
                                 label="Título do Fórum"
@@ -317,9 +293,9 @@ const CreateForumForm: React.FC<CreateForumFormProps> = ({ onClose, onForumCreat
                                 disabled={isSubmitting}
                                 placeholder="Ex: Discussões sobre desenvolvimento React"
                                 helperText={
-                                    title.length > 0 ? 
-                                    `${title.length}/100 caracteres` : 
-                                    "Um bom título ajuda os outros a encontrar seu fórum"
+                                    title.length > 0 ?
+                                        `${title.length}/100 caracteres` :
+                                        "Um bom título ajuda os outros a encontrar seu fórum"
                                 }
                                 InputProps={{
                                     endAdornment: title.length > 0 ? (
@@ -331,41 +307,39 @@ const CreateForumForm: React.FC<CreateForumFormProps> = ({ onClose, onForumCreat
                                     ) : null
                                 }}
                             />
-                            
                             {title.length > 0 && (
                                 <Box sx={{ mb: 4 }}>
                                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
                                         <Typography variant="body2" fontWeight={500}>
                                             Qualidade do título
                                         </Typography>
-                                        <Typography 
-                                            variant="body2" 
+                                        <Typography
+                                            variant="body2"
                                             fontWeight={600}
                                             sx={{ color: getScoreColor(titleScore) }}
                                         >
-                                            {titleScore < 30 ? 'Básico' : titleScore < 60 ? 'Bom' : 'Excelente'} 
+                                            {titleScore < 30 ? 'Básico' : titleScore < 60 ? 'Bom' : 'Excelente'}
                                             ({titleScore}%)
                                         </Typography>
                                     </Box>
-                                    <LinearProgress 
-                                        variant="determinate" 
-                                        value={titleScore} 
-                                        sx={{ 
-                                            height: 8, 
+                                    <LinearProgress
+                                        variant="determinate"
+                                        value={titleScore}
+                                        sx={{
+                                            height: 8,
                                             borderRadius: 4,
                                             backgroundColor: alpha(getScoreColor(titleScore), 0.2),
                                             '& .MuiLinearProgress-bar': {
                                                 backgroundColor: getScoreColor(titleScore)
                                             }
-                                        }} 
+                                        }}
                                     />
-                                    
                                     {titleScore < 60 && (
                                         <Box sx={{ mt: 2, p: 2, bgcolor: alpha(theme.palette.info.light, 0.1), borderRadius: 1 }}>
                                             <Typography variant="body2" color="text.secondary">
-                                                <InfoOutlinedIcon 
-                                                    fontSize="small" 
-                                                    sx={{ verticalAlign: 'middle', mr: 1, color: theme.palette.info.main }} 
+                                                <InfoOutlinedIcon
+                                                    fontSize="small"
+                                                    sx={{ verticalAlign: 'middle', mr: 1, color: theme.palette.info.main }}
                                                 />
                                                 Dica: Um bom título tem entre 20-100 caracteres e descreve claramente o tema do fórum.
                                             </Typography>
@@ -373,13 +347,11 @@ const CreateForumForm: React.FC<CreateForumFormProps> = ({ onClose, onForumCreat
                                     )}
                                 </Box>
                             )}
-                            
                             {/* Seleção de privacidade */}
                             <Paper elevation={0} sx={{ p: 2, bgcolor: alpha(theme.palette.background.default, 0.7), borderRadius: 2, mb: 2, border: `1px solid ${theme.palette.divider}` }}>
                                 <Typography variant="subtitle2" gutterBottom fontWeight={600}>
                                     Privacidade do Fórum
                                 </Typography>
-                                
                                 <Stack direction="row" spacing={2} sx={{ mb: 1 }}>
                                     <Button
                                         variant={isPublic ? "contained" : "outlined"}
@@ -400,19 +372,17 @@ const CreateForumForm: React.FC<CreateForumFormProps> = ({ onClose, onForumCreat
                                         Restrito
                                     </Button>
                                 </Stack>
-                                
                                 <Typography variant="caption" color="text.secondary">
-                                    {isPublic 
-                                        ? "Qualquer pessoa pode ver e participar deste fórum" 
+                                    {isPublic
+                                        ? "Qualquer pessoa pode ver e participar deste fórum"
                                         : "Apenas membros convidados podem ver e participar"}
                                 </Typography>
                             </Paper>
-                            
                             <Box sx={{ mt: 4 }}>
-                                <Button 
-                                    variant="contained" 
-                                    color="primary" 
-                                    onClick={handleNext} 
+                                <Button
+                                    variant="contained"
+                                    color="primary"
+                                    onClick={handleNext}
                                     disabled={!canAdvance()}
                                     endIcon={<ChevronRightIcon />}
                                     sx={{ px: 3, borderRadius: 2 }}
@@ -422,7 +392,6 @@ const CreateForumForm: React.FC<CreateForumFormProps> = ({ onClose, onForumCreat
                             </Box>
                         </Box>
                     )}
-                    
                     {activeStep === 1 && (
                         /* Passo 2: Descrição */
                         <Box>
@@ -432,7 +401,6 @@ const CreateForumForm: React.FC<CreateForumFormProps> = ({ onClose, onForumCreat
                             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
                                 Explique o propósito do fórum, regras de participação, ou qualquer outra informação importante.
                             </Typography>
-                            
                             <TextField
                                 fullWidth
                                 label="Descrição"
@@ -447,46 +415,44 @@ const CreateForumForm: React.FC<CreateForumFormProps> = ({ onClose, onForumCreat
                                 disabled={isSubmitting}
                                 placeholder="Descreva o propósito deste fórum, quais temas são apropriados, e outras informações relevantes..."
                                 helperText={
-                                    description ? 
-                                    `${description.length} caracteres` : 
-                                    "Uma boa descrição ajuda os participantes a entender o propósito do fórum"
+                                    description ?
+                                        `${description.length} caracteres` :
+                                        "Uma boa descrição ajuda os participantes a entender o propósito do fórum"
                                 }
                             />
-                            
                             {description.length > 0 && (
                                 <Box sx={{ mb: 4 }}>
                                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
                                         <Typography variant="body2" fontWeight={500}>
                                             Qualidade da descrição
                                         </Typography>
-                                        <Typography 
-                                            variant="body2" 
+                                        <Typography
+                                            variant="body2"
                                             fontWeight={600}
                                             sx={{ color: getScoreColor(descriptionScore) }}
                                         >
-                                            {descriptionScore < 30 ? 'Básica' : descriptionScore < 60 ? 'Boa' : 'Excelente'} 
+                                            {descriptionScore < 30 ? 'Básica' : descriptionScore < 60 ? 'Boa' : 'Excelente'}
                                             ({descriptionScore}%)
                                         </Typography>
                                     </Box>
-                                    <LinearProgress 
-                                        variant="determinate" 
-                                        value={descriptionScore} 
-                                        sx={{ 
-                                            height: 8, 
+                                    <LinearProgress
+                                        variant="determinate"
+                                        value={descriptionScore}
+                                        sx={{
+                                            height: 8,
                                             borderRadius: 4,
                                             backgroundColor: alpha(getScoreColor(descriptionScore), 0.2),
                                             '& .MuiLinearProgress-bar': {
                                                 backgroundColor: getScoreColor(descriptionScore)
                                             }
-                                        }} 
+                                        }}
                                     />
-                                    
                                     {descriptionScore < 60 && (
                                         <Box sx={{ mt: 2, p: 2, bgcolor: alpha(theme.palette.info.light, 0.1), borderRadius: 1 }}>
                                             <Typography variant="body2" color="text.secondary">
-                                                <InfoOutlinedIcon 
-                                                    fontSize="small" 
-                                                    sx={{ verticalAlign: 'middle', mr: 1, color: theme.palette.info.main }} 
+                                                <InfoOutlinedIcon
+                                                    fontSize="small"
+                                                    sx={{ verticalAlign: 'middle', mr: 1, color: theme.palette.info.main }}
                                                 />
                                                 Dica: Inclua parágrafos bem estruturados, explique as regras e expectativas, e seja detalhado sobre o propósito do fórum.
                                             </Typography>
@@ -494,12 +460,11 @@ const CreateForumForm: React.FC<CreateForumFormProps> = ({ onClose, onForumCreat
                                     )}
                                 </Box>
                             )}
-                            
                             {/* Imagem para o fórum */}
-                            <Paper elevation={0} sx={{ 
-                                p: 2, 
-                                bgcolor: alpha(theme.palette.background.default, 0.7), 
-                                borderRadius: 2, 
+                            <Paper elevation={0} sx={{
+                                p: 2,
+                                bgcolor: alpha(theme.palette.background.default, 0.7),
+                                borderRadius: 2,
                                 mb: 4,
                                 border: `1px solid ${theme.palette.divider}`,
                                 display: 'flex',
@@ -509,18 +474,17 @@ const CreateForumForm: React.FC<CreateForumFormProps> = ({ onClose, onForumCreat
                                 <Typography variant="subtitle2" gutterBottom fontWeight={600}>
                                     Imagem do fórum (opcional)
                                 </Typography>
-                                
                                 {image ? (
                                     <Box sx={{ position: 'relative', width: '100%', textAlign: 'center', mb: 2 }}>
                                         <Badge
                                             overlap="circular"
                                             anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
                                             badgeContent={
-                                                <IconButton 
-                                                    size="small" 
-                                                    onClick={() => setImage(null)} 
-                                                    sx={{ 
-                                                        bgcolor: 'white', 
+                                                <IconButton
+                                                    size="small"
+                                                    onClick={() => setImage(null)}
+                                                    sx={{
+                                                        bgcolor: 'white',
                                                         boxShadow: '0 2px 10px rgba(0,0,0,0.2)',
                                                         '&:hover': { bgcolor: 'white' }
                                                     }}
@@ -529,9 +493,9 @@ const CreateForumForm: React.FC<CreateForumFormProps> = ({ onClose, onForumCreat
                                                 </IconButton>
                                             }
                                         >
-                                            <Avatar 
-                                                src={image} 
-                                                alt="Forum image" 
+                                            <Avatar
+                                                src={image}
+                                                alt="Forum image"
                                                 sx={{ width: 100, height: 100, borderRadius: 2 }}
                                                 variant="rounded"
                                             />
@@ -553,12 +517,10 @@ const CreateForumForm: React.FC<CreateForumFormProps> = ({ onClose, onForumCreat
                                         />
                                     </Button>
                                 )}
-                                
                                 <Typography variant="caption" color="text.secondary">
                                     Escolha uma imagem que represente o tema do seu fórum
                                 </Typography>
                             </Paper>
-                            
                             <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                                 <Button
                                     onClick={handleBack}
@@ -580,7 +542,6 @@ const CreateForumForm: React.FC<CreateForumFormProps> = ({ onClose, onForumCreat
                             </Box>
                         </Box>
                     )}
-                    
                     {activeStep === 2 && (
                         /* Passo 3: Tags e Categorias */
                         <Box>
@@ -590,7 +551,6 @@ const CreateForumForm: React.FC<CreateForumFormProps> = ({ onClose, onForumCreat
                             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
                                 Adicione tags para ajudar outros usuários a encontrar seu fórum e selecione uma categoria.
                             </Typography>
-                            
                             {/* Autocomplete para tags */}
                             <Autocomplete
                                 freeSolo
@@ -615,9 +575,9 @@ const CreateForumForm: React.FC<CreateForumFormProps> = ({ onClose, onForumCreat
                                             ...params.InputProps,
                                             endAdornment: (
                                                 <InputAdornment position="end">
-                                                    <IconButton 
-                                                        onClick={handleAddTag} 
-                                                        edge="end" 
+                                                    <IconButton
+                                                        onClick={handleAddTag}
+                                                        edge="end"
                                                         disabled={isSubmitting || !tag || tags.length >= 8}
                                                     >
                                                         <AddIcon />
@@ -634,7 +594,6 @@ const CreateForumForm: React.FC<CreateForumFormProps> = ({ onClose, onForumCreat
                                     />
                                 )}
                             />
-                            
                             {/* Tags selecionadas */}
                             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, my: 3 }}>
                                 <AnimatePresence>
@@ -660,7 +619,6 @@ const CreateForumForm: React.FC<CreateForumFormProps> = ({ onClose, onForumCreat
                                         </motion.div>
                                     ))}
                                 </AnimatePresence>
-                                
                                 {tags.length === 0 && (
                                     <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>
                                         <LocalOfferIcon fontSize="small" sx={{ verticalAlign: 'middle', mr: 1, opacity: 0.7 }} />
@@ -668,74 +626,70 @@ const CreateForumForm: React.FC<CreateForumFormProps> = ({ onClose, onForumCreat
                                     </Typography>
                                 )}
                             </Box>
-                            
                             {/* Seleção de categoria */}
                             <Typography variant="subtitle1" gutterBottom sx={{ mt: 3, fontWeight: 600 }}>
                                 Categoria do fórum
                             </Typography>
-                            
                             <Box sx={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 2, mb: 4 }}>
                                 {FORUM_CATEGORIES.map((cat) => (
-                                    <Card 
+                                    <Box
                                         key={cat.name}
-                                        raised={category === cat.name}
-                                        sx={{ 
+                                        onClick={() => setCategory(cat.name)}
+                                        sx={{
                                             flex: '1 1 0',
                                             cursor: 'pointer',
                                             borderRadius: 2,
                                             transition: 'all 0.2s',
                                             transform: category === cat.name ? 'translateY(-2px)' : 'none',
                                             border: category === cat.name ? `2px solid ${theme.palette.primary.main}` : 'none',
+                                            bgcolor: 'background.paper',
+                                            boxShadow: category === cat.name ? 3 : 1,
+                                            p: 2 // padding que substitui o CardContent
                                         }}
-                                        onClick={() => setCategory(cat.name)}
                                     >
-                                        <CardContent>
-                                            <Box sx={{ 
-                                                display: 'flex', 
-                                                alignItems: 'center', 
-                                                mb: 1,
-                                                color: category === cat.name ? theme.palette.primary.main : 'inherit'
+                                        <Box sx={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            mb: 1,
+                                            color: category === cat.name ? theme.palette.primary.main : 'inherit'
+                                        }}>
+                                            {cat.icon}
+                                            <Typography variant="subtitle1" sx={{ ml: 1, fontWeight: 600 }}>
+                                                {cat.name}
+                                            </Typography>
+                                        </Box>
+                                        <Typography variant="body2" color="text.secondary">
+                                            {cat.description}
+                                        </Typography>
+                                        {category === cat.name && (
+                                            <Box sx={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                mt: 2,
+                                                color: theme.palette.primary.main
                                             }}>
-                                                {cat.icon}
-                                                <Typography variant="subtitle1" sx={{ ml: 1, fontWeight: 600 }}>
-                                                    {cat.name}
+                                                <CheckCircleIcon fontSize="small" sx={{ mr: 0.5 }} />
+                                                <Typography variant="caption" fontWeight={600}>
+                                                    Selecionada
                                                 </Typography>
                                             </Box>
-                                            <Typography variant="body2" color="text.secondary">
-                                                {cat.description}
-                                            </Typography>
-                                            
-                                            {category === cat.name && (
-                                                <Box sx={{ 
-                                                    display: 'flex', 
-                                                    alignItems: 'center', 
-                                                    mt: 2,
-                                                    color: theme.palette.primary.main
-                                                }}>
-                                                    <CheckCircleIcon fontSize="small" sx={{ mr: 0.5 }} />
-                                                    <Typography variant="caption" fontWeight={600}>
-                                                        Selecionada
-                                                    </Typography>
-                                                </Box>
-                                            )}
-                                        </CardContent>
-                                    </Card>
+                                        )}
+                                    </Box>
                                 ))}
                             </Box>
-                            
                             {/* Configurações de notificação */}
-                            <Paper elevation={0} sx={{ 
-                                p: 2, 
-                                bgcolor: alpha(theme.palette.background.default, 0.7), 
-                                borderRadius: 2, 
+                            <Paper elevation={0} sx={{
+                                p: 2,
+                                bgcolor: alpha(theme.palette.background.default, 0.7),
+                                borderRadius: 2,
                                 mb: 3,
                                 border: `1px solid ${theme.palette.divider}`,
                             }}>
                                 <FormControlLabel
                                     control={
-                                        <Switch 
-                                            checked={enableNotifications} 
-                                            onChange={(e) => setEnableNotifications(e.target.checked)} 
+                                        <Switch
+                                            checked={enableNotifications}
+                                            onChange={(e) => setEnableNotifications(e.target.checked)}
                                         />
                                     }
                                     label={(
@@ -750,7 +704,6 @@ const CreateForumForm: React.FC<CreateForumFormProps> = ({ onClose, onForumCreat
                                     )}
                                 />
                             </Paper>
-                            
                             <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                                 <Button
                                     onClick={handleBack}
@@ -772,7 +725,6 @@ const CreateForumForm: React.FC<CreateForumFormProps> = ({ onClose, onForumCreat
                             </Box>
                         </Box>
                     )}
-                    
                     {activeStep === 3 && (
                         /* Passo 4: Revisão e Criação */
                         <Box>
@@ -782,12 +734,11 @@ const CreateForumForm: React.FC<CreateForumFormProps> = ({ onClose, onForumCreat
                             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
                                 Verifique as informações abaixo antes de criar o fórum.
                             </Typography>
-                            
                             {/* Cartão de pré-visualização */}
-                            <Paper 
-                                elevation={3} 
-                                sx={{ 
-                                    borderRadius: 3, 
+                            <Paper
+                                elevation={3}
+                                sx={{
+                                    borderRadius: 3,
                                     overflow: 'hidden',
                                     mb: 4,
                                     transition: 'transform 0.3s',
@@ -797,10 +748,10 @@ const CreateForumForm: React.FC<CreateForumFormProps> = ({ onClose, onForumCreat
                                 }}
                             >
                                 {/* Header com cor ou imagem */}
-                                <Box sx={{ 
-                                    height: image ? 120 : 80, 
-                                    background: image 
-                                        ? `url(${image}) center/cover` 
+                                <Box sx={{
+                                    height: image ? 120 : 80,
+                                    background: image
+                                        ? `url(${image}) center/cover`
                                         : 'linear-gradient(90deg, #6B73FF 0%, #000DFF 100%)',
                                     display: 'flex',
                                     alignItems: 'flex-end',
@@ -809,10 +760,10 @@ const CreateForumForm: React.FC<CreateForumFormProps> = ({ onClose, onForumCreat
                                     position: 'relative'
                                 }}>
                                     {!image && (
-                                        <Typography 
-                                            variant="h5" 
-                                            sx={{ 
-                                                color: 'white', 
+                                        <Typography
+                                            variant="h5"
+                                            sx={{
+                                                color: 'white',
                                                 textAlign: 'center',
                                                 fontWeight: 700,
                                                 textShadow: '0 2px 4px rgba(0,0,0,0.3)'
@@ -821,7 +772,6 @@ const CreateForumForm: React.FC<CreateForumFormProps> = ({ onClose, onForumCreat
                                             {title}
                                         </Typography>
                                     )}
-                                    
                                     {/* Avatar que se sobrepõe à imagem/cor */}
                                     {image && (
                                         <Avatar
@@ -841,37 +791,34 @@ const CreateForumForm: React.FC<CreateForumFormProps> = ({ onClose, onForumCreat
                                         </Avatar>
                                     )}
                                 </Box>
-                                
                                 {/* Conteúdo */}
                                 <Box sx={{ p: 3, pt: image ? 5 : 3 }}>
                                     {image && (
-                                        <Typography 
-                                            variant="h5" 
-                                            align="center" 
+                                        <Typography
+                                            variant="h5"
+                                            align="center"
                                             gutterBottom
                                             sx={{ fontWeight: 700 }}
                                         >
                                             {title}
                                         </Typography>
                                     )}
-                                    
                                     <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2, flexWrap: 'wrap', gap: 0.5 }}>
                                         {tags.map(tag => (
-                                            <Chip 
-                                                key={tag} 
-                                                label={tag} 
-                                                size="small" 
-                                                sx={{ 
+                                            <Chip
+                                                key={tag}
+                                                label={tag}
+                                                size="small"
+                                                sx={{
                                                     bgcolor: alpha(theme.palette.primary.main, 0.1),
                                                     color: theme.palette.primary.main,
-                                                }} 
+                                                }}
                                             />
                                         ))}
                                     </Box>
-                                    
-                                    <Typography 
-                                        variant="body2" 
-                                        color="text.secondary" 
+                                    <Typography
+                                        variant="body2"
+                                        color="text.secondary"
                                         align="center"
                                         sx={{
                                             maxHeight: 80,
@@ -884,10 +831,9 @@ const CreateForumForm: React.FC<CreateForumFormProps> = ({ onClose, onForumCreat
                                     >
                                         {description}
                                     </Typography>
-                                    
-                                    <Box sx={{ 
-                                        display: 'flex', 
-                                        justifyContent: 'center', 
+                                    <Box sx={{
+                                        display: 'flex',
+                                        justifyContent: 'center',
                                         mt: 2,
                                         borderTop: `1px solid ${alpha(theme.palette.divider, 0.5)}`,
                                         pt: 2
@@ -909,7 +855,6 @@ const CreateForumForm: React.FC<CreateForumFormProps> = ({ onClose, onForumCreat
                                     </Box>
                                 </Box>
                             </Paper>
-                            
                             {/* Botão para abrir diálogo de visualização completa */}
                             <Box sx={{ textAlign: 'center', mb: 4 }}>
                                 <Button
@@ -921,12 +866,11 @@ const CreateForumForm: React.FC<CreateForumFormProps> = ({ onClose, onForumCreat
                                     Ver em tela cheia
                                 </Button>
                             </Box>
-                            
                             {/* Mensagem de erro caso exista */}
                             {error && (
-                                <Box sx={{ 
-                                    mb: 3, 
-                                    p: 2, 
+                                <Box sx={{
+                                    mb: 3,
+                                    p: 2,
                                     bgcolor: alpha(theme.palette.error.main, 0.1),
                                     borderRadius: 1,
                                     color: theme.palette.error.main
@@ -936,7 +880,6 @@ const CreateForumForm: React.FC<CreateForumFormProps> = ({ onClose, onForumCreat
                                     </Typography>
                                 </Box>
                             )}
-                            
                             <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                                 <Button
                                     onClick={handleBack}
@@ -952,9 +895,9 @@ const CreateForumForm: React.FC<CreateForumFormProps> = ({ onClose, onForumCreat
                                     onClick={handleSubmit}
                                     disabled={isSubmitting}
                                     startIcon={isSubmitting ? <CircularProgress size={20} color="inherit" /> : <ForumIcon />}
-                                    sx={{ 
-                                        px: 4, 
-                                        py: 1, 
+                                    sx={{
+                                        px: 4,
+                                        py: 1,
                                         borderRadius: 2,
                                         position: 'relative',
                                         overflow: 'hidden',
@@ -981,7 +924,6 @@ const CreateForumForm: React.FC<CreateForumFormProps> = ({ onClose, onForumCreat
                     )}
                 </motion.div>
             </AnimatePresence>
-            
             {/* Diálogo de pré-visualização */}
             <Dialog
                 open={previewDialogOpen}
@@ -998,18 +940,17 @@ const CreateForumForm: React.FC<CreateForumFormProps> = ({ onClose, onForumCreat
                             <CloseIcon />
                         </IconButton>
                     </Box>
-                    
-                    <Box sx={{ 
-                        bgcolor: theme.palette.mode === 'dark' ? '#121212' : '#f5f5f5', 
-                        borderRadius: 3, 
+                    <Box sx={{
+                        bgcolor: theme.palette.mode === 'dark' ? '#121212' : '#f5f5f5',
+                        borderRadius: 3,
                         overflow: 'hidden',
                         border: `1px solid ${theme.palette.divider}`
                     }}>
                         {/* Header com imagem de capa */}
-                        <Box sx={{ 
-                            height: 200, 
-                            background: image 
-                                ? `url(${image}) center/cover` 
+                        <Box sx={{
+                            height: 200,
+                            background: image
+                                ? `url(${image}) center/cover`
                                 : 'linear-gradient(90deg, #6B73FF 0%, #000DFF 100%)',
                             display: 'flex',
                             alignItems: 'flex-end',
@@ -1018,10 +959,10 @@ const CreateForumForm: React.FC<CreateForumFormProps> = ({ onClose, onForumCreat
                             p: 3
                         }}>
                             {!image && (
-                                <Typography 
-                                    variant="h4" 
-                                    sx={{ 
-                                        color: 'white', 
+                                <Typography
+                                    variant="h4"
+                                    sx={{
+                                        color: 'white',
                                         textAlign: 'center',
                                         fontWeight: 700,
                                         textShadow: '0 2px 4px rgba(0,0,0,0.3)'
@@ -1030,7 +971,6 @@ const CreateForumForm: React.FC<CreateForumFormProps> = ({ onClose, onForumCreat
                                     {title}
                                 </Typography>
                             )}
-                            
                             {image && (
                                 <Avatar
                                     sx={{
@@ -1049,48 +989,45 @@ const CreateForumForm: React.FC<CreateForumFormProps> = ({ onClose, onForumCreat
                                 </Avatar>
                             )}
                         </Box>
-                        
                         {/* Conteúdo */}
                         <Box sx={{ p: 4, pt: image ? 7 : 4 }}>
                             {image && (
-                                <Typography 
-                                    variant="h4" 
-                                    align="center" 
+                                <Typography
+                                    variant="h4"
+                                    align="center"
                                     gutterBottom
                                     sx={{ fontWeight: 700, mb: 2 }}
                                 >
                                     {title}
                                 </Typography>
                             )}
-                            
-                            <Box sx={{ 
-                                display: 'flex', 
-                                justifyContent: 'center', 
-                                mb: 3, 
+                            <Box sx={{
+                                display: 'flex',
+                                justifyContent: 'center',
+                                mb: 3,
                                 flexWrap: 'wrap',
                                 gap: 1
                             }}>
                                 {tags.map(tag => (
-                                    <Chip 
-                                        key={tag} 
-                                        label={tag} 
-                                        sx={{ 
+                                    <Chip
+                                        key={tag}
+                                        label={tag}
+                                        sx={{
                                             bgcolor: alpha(theme.palette.primary.main, 0.1),
                                             color: theme.palette.primary.main,
-                                        }} 
+                                        }}
                                     />
                                 ))}
                             </Box>
-                            
-                            <Paper elevation={0} sx={{ 
-                                p: 3, 
-                                mb: 3, 
+                            <Paper elevation={0} sx={{
+                                p: 3,
+                                mb: 3,
                                 bgcolor: theme.palette.background.paper,
                                 borderRadius: 2,
                                 maxWidth: 700,
                                 mx: 'auto'
                             }}>
-                                <Typography 
+                                <Typography
                                     variant="body1"
                                     sx={{
                                         whiteSpace: 'pre-line',
@@ -1101,9 +1038,8 @@ const CreateForumForm: React.FC<CreateForumFormProps> = ({ onClose, onForumCreat
                                     {description}
                                 </Typography>
                             </Paper>
-                            
-                            <Box sx={{ 
-                                display: 'flex', 
+                            <Box sx={{
+                                display: 'flex',
                                 justifyContent: 'center',
                                 alignItems: 'center',
                                 flexWrap: 'wrap',
@@ -1117,7 +1053,6 @@ const CreateForumForm: React.FC<CreateForumFormProps> = ({ onClose, onForumCreat
                                 <Box sx={{ display: 'flex', alignItems: 'center' }}>
                                     <Avatar
                                         sx={{ width: 40, height: 40, mr: 1 }}
-                                        src={user?.avatar}
                                     >
                                         {user?.fullName?.[0] || 'U'}
                                     </Avatar>
@@ -1130,22 +1065,18 @@ const CreateForumForm: React.FC<CreateForumFormProps> = ({ onClose, onForumCreat
                                         </Typography>
                                     </Box>
                                 </Box>
-                                
                                 <Divider orientation="vertical" flexItem sx={{ height: 30 }} />
-                                
                                 <Chip
                                     icon={isPublic ? <PublicIcon fontSize="small" /> : <LockOutlinedIcon fontSize="small" />}
                                     label={isPublic ? "Fórum Público" : "Fórum Restrito"}
                                     color={isPublic ? "primary" : "default"}
                                 />
-                                
                                 <Chip
                                     icon={<ForumIcon fontSize="small" />}
                                     label={category}
                                     color="primary"
                                     variant="outlined"
                                 />
-                                
                                 {enableNotifications && (
                                     <Chip
                                         icon={<NotificationsActiveIcon fontSize="small" />}

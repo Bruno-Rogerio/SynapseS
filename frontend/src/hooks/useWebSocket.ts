@@ -1,9 +1,11 @@
+// src/hooks/useWebSocket.ts - versão ajustada com limites de reconexão
 import { useState, useEffect, useCallback, useRef } from 'react';
 import io, { Socket } from 'socket.io-client';
 
 interface WebSocketOptions {
     token?: string;
     query?: Record<string, string>;
+    auth?: Record<string, any>;
 }
 
 type WebSocketHook<T> = {
@@ -22,66 +24,177 @@ export const useWebSocket = <T = any>(
     const [isConnected, setIsConnected] = useState(false);
     const [lastMessage, setLastMessage] = useState<T | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [permanentlyDisabled, setPermanentlyDisabled] = useState(false);
+
     const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
     const reconnectAttemptsRef = useRef(0);
-    const maxReconnectAttempts = 5;
+    const connectionAttemptedRef = useRef(false);
+    const reconnectingRef = useRef(false);
+
+    // Configurações ajustáveis
+    const maxReconnectAttempts = 3; // Reduzido de 5 para 3
+    const baseReconnectDelay = 3000; // Aumentado para 3 segundos iniciais
+    const maxReconnectDelay = 30000; // 30 segundos máximo
+
+    // Função para calcular o tempo de espera com backoff exponencial
+    const getBackoffDelay = useCallback(() => {
+        const attempt = reconnectAttemptsRef.current;
+        // Fórmula: delay base * (2^tentativa) com um limite máximo
+        return Math.min(baseReconnectDelay * Math.pow(2, attempt), maxReconnectDelay);
+    }, []);
 
     const connect = useCallback(() => {
+        // Não tente conectar se estiver permanentemente desabilitado
+        if (permanentlyDisabled) {
+            console.log('WebSocket permanently disabled due to multiple connection failures');
+            return () => { };
+        }
+
+        // Verificar se a conexão deve ser habilitada através do parâmetro query
+        if (options.query?.enabled === 'false') {
+            console.log('WebSocket connection explicitly disabled by query parameter');
+            return () => { };
+        }
+
+        // Verificar se auth contém userId antes de tentar conectar
+        if (!options.auth?.userId) {
+            console.log('Skipping WebSocket connection: no userId in auth object');
+            setError('Autenticação necessária para conectar ao WebSocket');
+            return () => { };
+        }
+
+        // Verificar se o userId é uma string vazia (indicando desativação)
+        if (options.auth.userId === '') {
+            console.log('WebSocket connection disabled: empty userId');
+            return () => { };
+        }
+
+        // Evitar tentativas de conexão simultâneas
+        if (connectionAttemptedRef.current || reconnectingRef.current) {
+            console.log('Connection already in progress - preventing duplicate connections');
+            return () => { };
+        }
+
+        connectionAttemptedRef.current = true;
         console.log('Attempting to connect to Socket.IO:', url);
-        const newSocket = io(url, {
-            auth: options.token ? { token: options.token } : undefined,
-            query: options.query,
-            transports: ['websocket'],
-            // reconnection: false, // We'll handle reconnection manually
-            timeout: 10000, // Increase timeout to 10 seconds
-        });
+        console.log('Socket.IO auth configuration:', options.auth);
 
-        newSocket.on('connect', () => {
-            console.log('Socket.IO connected successfully');
-            setIsConnected(true);
-            setError(null);
-            reconnectAttemptsRef.current = 0;
-            if (reconnectTimeoutRef.current) {
-                clearTimeout(reconnectTimeoutRef.current);
-            }
-        });
+        try {
+            const newSocket = io(url, {
+                auth: options.auth,
+                query: options.query,
+                transports: ['websocket'],
+                timeout: 10000,
+                reconnection: false, // Desabilitar reconexão automática do Socket.io
+            });
 
-        newSocket.on('disconnect', (reason) => {
-            console.log('Socket.IO connection closed:', reason);
-            setIsConnected(false);
-            attemptReconnect();
-        });
+            newSocket.on('connect', () => {
+                console.log('Socket.IO connected successfully');
+                setIsConnected(true);
+                setError(null);
+                reconnectAttemptsRef.current = 0;
+                reconnectingRef.current = false;
+                if (reconnectTimeoutRef.current) {
+                    clearTimeout(reconnectTimeoutRef.current);
+                    reconnectTimeoutRef.current = undefined;
+                }
+            });
 
-        newSocket.on('connect_error', (error: Error) => {
-            console.error('Socket.IO connection error:', error);
-            setError(error.message);
-            attemptReconnect();
-        });
+            newSocket.on('disconnect', (reason) => {
+                console.log('Socket.IO connection closed:', reason);
+                setIsConnected(false);
 
-        setSocket(newSocket);
+                // Só tenta reconectar para razões específicas
+                if (reason === 'io server disconnect' || reason === 'io client disconnect') {
+                    // Se o servidor ou cliente desconectou explicitamente, não reconectar
+                    console.log('Explicit disconnect, not attempting to reconnect');
+                } else {
+                    attemptReconnect();
+                }
+            });
 
-        return () => {
-            console.log('Cleaning up Socket.IO connection');
-            newSocket.close();
-        };
-    }, [url, options.token, options.query]);
+            newSocket.on('connect_error', (err) => {
+                console.error('Socket.IO connection error:', err.message);
+                setError(err.message);
+                // Não chamar attemptReconnect aqui, pois o disconnect já vai ser chamado
+            });
+
+            setSocket(newSocket);
+
+            return () => {
+                console.log('Cleaning up Socket.IO connection');
+                connectionAttemptedRef.current = false;
+                if (newSocket) {
+                    newSocket.removeAllListeners();
+                    newSocket.close();
+                }
+            };
+        } catch (err) {
+            console.error('Error creating Socket.IO instance:', err);
+            connectionAttemptedRef.current = false;
+            return () => { };
+        }
+    }, [url, options.auth, options.query, permanentlyDisabled]);
 
     const attemptReconnect = useCallback(() => {
-        if (reconnectAttemptsRef.current < maxReconnectAttempts) {
-            reconnectAttemptsRef.current += 1;
-            const delay = Math.min(1000 * 2 ** reconnectAttemptsRef.current, 30000);
-            console.log(`Attempting to reconnect in ${delay}ms (attempt ${reconnectAttemptsRef.current})`);
-            reconnectTimeoutRef.current = setTimeout(() => {
-                connect();
-            }, delay);
-        } else {
-            console.error('Max reconnection attempts reached');
-            setError('Unable to connect to the server. Please try again later.');
+        // Não tente reconectar se estiver permanentemente desabilitado
+        if (permanentlyDisabled) {
+            return;
         }
-    }, [connect]);
+
+        // Se já estiver tentando reconectar, não inicie outra tentativa
+        if (reconnectingRef.current) {
+            console.log('Reconnection already in progress');
+            return;
+        }
+
+        // Verificar se a conexão está desativada
+        if (options.query?.enabled === 'false') {
+            console.log('Reconnection aborted: connection disabled by query parameter');
+            return;
+        }
+
+        // Verificar se temos userId válido antes de tentar reconectar
+        if (!options.auth?.userId || options.auth?.userId === '') {
+            console.log('Aborting reconnection: userId not available or empty');
+            setError('Authentication required to connect to WebSocket');
+            return;
+        }
+
+        // Limitar o número de tentativas
+        if (reconnectAttemptsRef.current >= maxReconnectAttempts) {
+            console.error(`Max reconnection attempts (${maxReconnectAttempts}) reached. Disabling WebSocket.`);
+            setError('Não foi possível conectar ao servidor após várias tentativas.');
+            setPermanentlyDisabled(true);
+            return;
+        }
+
+        reconnectingRef.current = true;
+        reconnectAttemptsRef.current += 1;
+
+        const delay = getBackoffDelay();
+        console.log(`Attempting to reconnect in ${delay}ms (attempt ${reconnectAttemptsRef.current}/${maxReconnectAttempts})`);
+
+        // Limpar qualquer timeout anterior
+        if (reconnectTimeoutRef.current) {
+            clearTimeout(reconnectTimeoutRef.current);
+        }
+
+        reconnectTimeoutRef.current = setTimeout(() => {
+            console.log('Executing reconnection attempt');
+            if (socket) {
+                socket.close();
+                setSocket(null);
+            }
+            connectionAttemptedRef.current = false;
+            reconnectingRef.current = false;
+            connect();
+        }, delay);
+    }, [connect, options.auth, options.query, socket, getBackoffDelay, permanentlyDisabled]);
 
     useEffect(() => {
         const cleanup = connect();
+
         return () => {
             cleanup();
             if (reconnectTimeoutRef.current) {
@@ -89,6 +202,31 @@ export const useWebSocket = <T = any>(
             }
         };
     }, [connect]);
+
+    // Botão de reset para reconexão manual (opcional)
+    const resetConnection = useCallback(() => {
+        if (permanentlyDisabled) {
+            console.log('Resetting WebSocket connection state');
+            setPermanentlyDisabled(false);
+            reconnectAttemptsRef.current = 0;
+            connectionAttemptedRef.current = false;
+            reconnectingRef.current = false;
+
+            if (reconnectTimeoutRef.current) {
+                clearTimeout(reconnectTimeoutRef.current);
+            }
+
+            if (socket) {
+                socket.close();
+                setSocket(null);
+            }
+
+            // Tentar reconectar após um pequeno delay
+            setTimeout(() => {
+                connect();
+            }, 1000);
+        }
+    }, [permanentlyDisabled, socket, connect]);
 
     const sendMessage = useCallback((event: string, message: T) => {
         if (socket && isConnected) {
@@ -114,5 +252,11 @@ export const useWebSocket = <T = any>(
         }
     }, [socket]);
 
-    return { isConnected, sendMessage, socket, lastMessage, error };
+    return {
+        isConnected,
+        sendMessage,
+        socket,
+        lastMessage,
+        error
+    };
 };

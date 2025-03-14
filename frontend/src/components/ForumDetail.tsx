@@ -73,19 +73,15 @@ const ForumDetail: React.FC<ForumDetailProps> = ({
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
     const isTablet = useMediaQuery(theme.breakpoints.down('md'));
-
     // Refs para rolagem
     const dialogContentRef = useRef<HTMLDivElement>(null);
     const chatSectionRef = useRef<HTMLDivElement>(null);
     const headerRef = useRef<HTMLDivElement>(null);
-
     // Para modo de rota
     const { id: paramId } = useParams<{ id: string }>();
     const navigate = useNavigate();
-
     // Use o ID da prop ou do parâmetro da URL
     const id = propForumId || paramId;
-
     // Determinar se estamos no modo modal ou de página
     const isModalMode = isModal || Boolean(propForumId && onClose);
 
@@ -107,21 +103,17 @@ const ForumDetail: React.FC<ForumDetailProps> = ({
                 setLoading(false);
                 return;
             }
-
             setLoading(true);
             setError(null);
-
             try {
                 const forumResponse = await axios.get<Forum>(
                     `${import.meta.env.VITE_API_BASE_URL}/api/forums/${id}`,
                     { withCredentials: true }
                 );
                 setForum(forumResponse.data);
-
                 // Adicione um pequeno delay para simular carga e mostrar as animações
                 setTimeout(() => {
                     setLoading(false);
-
                     // Scroll para o topo após o carregamento
                     if (dialogContentRef.current) {
                         dialogContentRef.current.scrollTop = 0;
@@ -137,7 +129,6 @@ const ForumDetail: React.FC<ForumDetailProps> = ({
                 setLoading(false);
             }
         };
-
         if (!isModalMode || (isModalMode && open)) {
             fetchForumDetails();
         }
@@ -161,7 +152,6 @@ const ForumDetail: React.FC<ForumDetailProps> = ({
     // Handle tab change with scroll to sections
     const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
         setTabValue(newValue);
-
         // Rolar automaticamente para a seção correspondente
         if (newValue === 0 && chatSectionRef.current) {
             setTimeout(() => {
@@ -181,18 +171,15 @@ const ForumDetail: React.FC<ForumDetailProps> = ({
     // Função para obter a cor de fundo do banner baseada no título
     const getBannerGradient = (title?: string) => {
         if (!title) return 'linear-gradient(135deg, #4776E6 0%, #8E54E9 100%)';
-
         // Use a primeira letra do título para determinar a cor
         const firstChar = title.charCodeAt(0) % 5;
-
         const gradients = [
             'linear-gradient(135deg, #4776E6 0%, #8E54E9 100%)', // Azul para roxo
             'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)', // Verde
             'linear-gradient(135deg, #FF416C 0%, #FF4B2B 100%)', // Vermelho
             'linear-gradient(135deg, #f46b45 0%, #eea849 100%)', // Laranja
-            'linear-gradient(135deg, #009FFD 0%, #2A2A72 100%)'  // Azul escuro
+            'linear-gradient(135deg, #009FFD 0%, #2A2A72 100%)' // Azul escuro
         ];
-
         return gradients[firstChar];
     };
 
@@ -204,34 +191,28 @@ const ForumDetail: React.FC<ForumDetailProps> = ({
                 // Usar as iniciais do nome de usuário (primeira letra)
                 return id.username.charAt(0).toUpperCase();
             }
-
             if ('_id' in id) {
                 // Se for um objeto com propriedade _id
-                // Não use os caracteres do ID, use uma inicial genérica
+                // Não use os caracteares do ID, use uma inicial genérica
                 return 'U'; // U de Usuário
             }
         }
-
         // Se for uma string (ID), não use os caracteres do ID
         if (typeof id === 'string') {
             return 'U'; // U de Usuário
         }
-
         // Fallback para um valor padrão
         return '?';
     };
 
-   
     // Gera uma cor para avatar baseada no ID
     const getAvatarColor = (id: any) => {
         const colors = [
             '#1976d2', '#388e3c', '#d32f2f', '#f57c00',
             '#7b1fa2', '#0288d1', '#c2185b', '#303f9f'
         ];
-
         // Garantir que temos uma string para trabalhar
         let idString: string;
-
         // Verificar o tipo do id recebido
         if (typeof id === 'string') {
             idString = id;
@@ -242,12 +223,10 @@ const ForumDetail: React.FC<ForumDetailProps> = ({
             // Fallback para um valor padrão se o id não for string nem objeto com _id
             return colors[0]; // Retorna a primeira cor como fallback
         }
-
         // Use um hash simples do ID para escolher uma cor
         const hash = idString.split('').reduce((a, b) => {
             return a + b.charCodeAt(0);
         }, 0);
-
         return colors[hash % colors.length];
     };
 
@@ -331,7 +310,6 @@ const ForumDetail: React.FC<ForumDetailProps> = ({
 
     const renderForumHeader = () => {
         if (!forum) return null;
-
         return (
             <Box
                 ref={headerRef}
@@ -373,7 +351,6 @@ const ForumDetail: React.FC<ForumDetailProps> = ({
                             </Typography>
                         </Box>
                     </Fade>
-
                     {/* Avatar do criador do fórum */}
                     <Fade in={true} timeout={800}>
                         <Box
@@ -387,18 +364,20 @@ const ForumDetail: React.FC<ForumDetailProps> = ({
                             }}
                         >
                             <Avatar
-                                src={forum.createdBy.avatar}
+                                // Uso de type assertion e fallback para compatibilidade
+                                src={(forum.createdBy as any).avatar || undefined}
                                 sx={{
                                     width: 70,
                                     height: 70,
                                     border: '4px solid white',
                                     boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
                                 }}
-                            />
+                            >
+                                {forum.createdBy.username?.[0] || 'U'}
+                            </Avatar>
                         </Box>
                     </Fade>
                 </Box>
-
                 {/* Conteúdo principal do card do fórum */}
                 <Paper
                     elevation={0}
@@ -425,7 +404,6 @@ const ForumDetail: React.FC<ForumDetailProps> = ({
                                     >
                                         {forum.description}
                                     </Typography>
-
                                     <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                                         <TagIcon
                                             sx={{
@@ -459,7 +437,6 @@ const ForumDetail: React.FC<ForumDetailProps> = ({
                                 </Box>
                             </Fade>
                         </Grid>
-
                         <Grid item xs={12} md={4}>
                             <Fade in={true} timeout={1000}>
                                 <Stack spacing={1.5}>
@@ -472,7 +449,6 @@ const ForumDetail: React.FC<ForumDetailProps> = ({
                                             Criado por <strong>{forum.createdBy.username}</strong>
                                         </Typography>
                                     </Box>
-
                                     <Box sx={{ display: 'flex', alignItems: 'center' }}>
                                         <AccessTimeIcon
                                             fontSize="small"
@@ -482,7 +458,6 @@ const ForumDetail: React.FC<ForumDetailProps> = ({
                                             Última atividade {new Date(forum.lastActivity).toLocaleDateString()} às {new Date(forum.lastActivity).toLocaleTimeString().substring(0, 5)}
                                         </Typography>
                                     </Box>
-
                                     <Box sx={{ display: 'flex', alignItems: 'center' }}>
                                         <PeopleIcon
                                             fontSize="small"
@@ -492,7 +467,6 @@ const ForumDetail: React.FC<ForumDetailProps> = ({
                                             <strong>{forum.followers.length}</strong> seguidores
                                         </Typography>
                                     </Box>
-
                                     <Box sx={{ display: 'flex', alignItems: 'center' }}>
                                         <VisibilityIcon
                                             fontSize="small"
@@ -502,7 +476,6 @@ const ForumDetail: React.FC<ForumDetailProps> = ({
                                             <strong>{forum.viewCount || 0}</strong> visualizações
                                         </Typography>
                                     </Box>
-
                                     {/* Renderização dos avatares de seguidores */}
                                     {!isTablet && forum.followers.length > 0 && (
                                         <AvatarGroup max={5} sx={{ mt: 2 }}>
@@ -523,7 +496,6 @@ const ForumDetail: React.FC<ForumDetailProps> = ({
                             </Fade>
                         </Grid>
                     </Grid>
-
                     {/* Ações do fórum */}
                     <Fade in={true} timeout={1100}>
                         <Box sx={{
@@ -551,7 +523,6 @@ const ForumDetail: React.FC<ForumDetailProps> = ({
                                     </IconButton>
                                 </Tooltip>
                             </Box>
-
                             {!isMobile && (
                                 <Badge
                                     badgeContent={forum.messageCount || 0}
@@ -582,7 +553,6 @@ const ForumDetail: React.FC<ForumDetailProps> = ({
         if (loading) return renderLoading();
         if (error) return renderError();
         if (!forum) return renderNotFound();
-
         return (
             <Fade in={true} timeout={500}>
                 <Box sx={{ overflow: 'hidden' }}>
@@ -596,10 +566,8 @@ const ForumDetail: React.FC<ForumDetailProps> = ({
                             Voltar
                         </Button>
                     )}
-
                     {/* Cabeçalho do fórum */}
                     {renderForumHeader()}
-
                     {/* Abas para diferentes seções */}
                     <Box sx={{ mb: 2 }}>
                         <Tabs
@@ -630,7 +598,6 @@ const ForumDetail: React.FC<ForumDetailProps> = ({
                             {!isMobile && <Tab label="Membros" />}
                         </Tabs>
                     </Box>
-
                     {/* Conteúdo da aba selecionada */}
                     <Box sx={{ mt: 3 }}>
                         {tabValue === 0 && (
@@ -661,7 +628,6 @@ const ForumDetail: React.FC<ForumDetailProps> = ({
                                     >
                                         Discussão
                                     </Typography>
-
                                     {!user && (
                                         <Button
                                             variant="contained"
@@ -680,14 +646,12 @@ const ForumDetail: React.FC<ForumDetailProps> = ({
                                         </Button>
                                     )}
                                 </Box>
-
                                 <Divider sx={{ mb: 2 }} />
-
                                 <Box sx={{
                                     flexGrow: 1,
                                     display: 'flex',
                                     flexDirection: 'column',
-                                    overflow: 'hidden',  // Importante para o container do chat
+                                    overflow: 'hidden', // Importante para o container do chat
                                 }}>
                                     {user ? (
                                         // Estilizando o componente ForumChat para permitir rolagem
@@ -695,7 +659,7 @@ const ForumDetail: React.FC<ForumDetailProps> = ({
                                             flexGrow: 1,
                                             display: 'flex',
                                             flexDirection: 'column',
-                                            overflow: 'hidden'  // Importante para o chat
+                                            overflow: 'hidden' // Importante para o chat
                                         }}>
                                             <ForumChat forumId={id!} currentUser={user} />
                                         </Box>
@@ -731,7 +695,6 @@ const ForumDetail: React.FC<ForumDetailProps> = ({
                                 </Box>
                             </Paper>
                         )}
-
                         {tabValue === 1 && (
                             <Paper
                                 elevation={0}
@@ -755,7 +718,6 @@ const ForumDetail: React.FC<ForumDetailProps> = ({
                                         <Typography variant="body2" paragraph>
                                             {forum.description}
                                         </Typography>
-
                                         <Typography variant="subtitle2" gutterBottom>
                                             Tags
                                         </Typography>
@@ -784,7 +746,6 @@ const ForumDetail: React.FC<ForumDetailProps> = ({
                                 </Grid>
                             </Paper>
                         )}
-
                         {tabValue === 2 && (
                             <Paper
                                 elevation={0}
@@ -800,7 +761,6 @@ const ForumDetail: React.FC<ForumDetailProps> = ({
                                     Membros do Fórum
                                 </Typography>
                                 <Divider sx={{ mb: 2 }} />
-
                                 <Grid container spacing={2}>
                                     <Grid item xs={12}>
                                         <Typography variant="subtitle2" gutterBottom>
@@ -808,9 +768,12 @@ const ForumDetail: React.FC<ForumDetailProps> = ({
                                         </Typography>
                                         <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                                             <Avatar
-                                                src={forum.createdBy.avatar}
+                                                // Uso de type assertion e fallback para compatibilidade
+                                                src={(forum.createdBy as any).avatar || undefined}
                                                 sx={{ mr: 1, width: 40, height: 40 }}
-                                            />
+                                            >
+                                                {forum.createdBy.username?.[0] || 'U'}
+                                            </Avatar>
                                             <Box>
                                                 <Typography variant="body2" fontWeight="bold">
                                                     {forum.createdBy.username}
@@ -821,7 +784,6 @@ const ForumDetail: React.FC<ForumDetailProps> = ({
                                             </Box>
                                         </Box>
                                     </Grid>
-
                                     <Grid item xs={12}>
                                         <Typography variant="subtitle2" gutterBottom sx={{ mt: 1 }}>
                                             Seguidores ({forum.followers.length})
@@ -893,7 +855,6 @@ const ForumDetail: React.FC<ForumDetailProps> = ({
                 >
                     <CloseIcon />
                 </IconButton>
-
                 <DialogContent
                     ref={dialogContentRef}
                     sx={{
@@ -901,7 +862,7 @@ const ForumDetail: React.FC<ForumDetailProps> = ({
                         pb: { xs: 3, sm: 4 },
                         pt: { xs: 2, sm: 2 },
                         overflowY: 'auto', // Garante que o conteúdo tenha scroll
-                        maxHeight: '80vh',  // Define uma altura máxima para garantir o scroll
+                        maxHeight: '80vh', // Define uma altura máxima para garantir o scroll
                         scrollBehavior: 'smooth', // Rolagem suave
                     }}
                 >
