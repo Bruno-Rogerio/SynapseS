@@ -35,6 +35,7 @@ export interface IMessage {
 
 // Interface para o fórum
 export interface IForum extends Document {
+    _id: Types.ObjectId;
     title: string;
     description: string;
     createdBy: Types.ObjectId;
@@ -48,6 +49,7 @@ export interface IForum extends Document {
     messages: IMessage[];
     moderators: Types.ObjectId[];
     messageCount: number;
+    company: Types.ObjectId; // Campo para armazenar a empresa
     updateLastActivity: () => Promise<IForum>;
 }
 
@@ -90,15 +92,26 @@ const ForumSchema = new Schema({
     messages: [MessageSchema],
     moderators: [{ type: Schema.Types.ObjectId, ref: 'User' }],
     messageCount: { type: Number, default: 0 },
+    // Campo company com índice
+    company: {
+        type: Schema.Types.ObjectId,
+        ref: 'Company',
+        required: true,
+        index: true
+    },
 }, {
     timestamps: true
 });
 
 // Indexação para melhorar a performance das buscas
 ForumSchema.index({ title: 'text', description: 'text', tags: 'text' });
-ForumSchema.index({ createdBy: 1, lastActivity: -1 });
-ForumSchema.index({ tags: 1 });
-ForumSchema.index({ isArchived: 1 });
+
+// Índices compostos com company para isolamento de dados
+ForumSchema.index({ company: 1, createdBy: 1, lastActivity: -1 });
+ForumSchema.index({ company: 1, tags: 1 });
+ForumSchema.index({ company: 1, isArchived: 1 });
+ForumSchema.index({ company: 1, lastActivity: -1 }); // Para ordenar por atividade recente
+ForumSchema.index({ company: 1, followers: 1 }); // Para buscar forums que um usuário segue
 
 // Método para atualizar lastActivity
 ForumSchema.methods.updateLastActivity = function (this: IForum) {
@@ -114,6 +127,98 @@ ForumSchema.pre<IForum>('save', function (next) {
     }
     next();
 });
+
+// Configuração para toJSON e toObject incluir virtuals e transformar IDs em strings
+ForumSchema.set('toJSON', {
+    virtuals: true,
+    transform: function (doc, ret) {
+        if (ret._id) ret._id = ret._id.toString();
+        if (ret.company) ret.company = ret.company.toString();
+
+        // Converter IDs das mensagens
+        if (ret.messages && Array.isArray(ret.messages)) {
+            ret.messages = ret.messages.map((msg: any) => {
+                if (msg._id) msg._id = msg._id.toString();
+                if (msg.author) msg.author = msg.author.toString();
+                if (msg.replyTo) msg.replyTo = msg.replyTo.toString();
+                return msg;
+            });
+        }
+
+        // Converter arrays de IDs para strings
+        if (ret.followers && Array.isArray(ret.followers)) {
+            ret.followers = ret.followers.map((id: any) =>
+                typeof id === 'object' && id._id ? id._id.toString() : id.toString()
+            );
+        }
+
+        if (ret.moderators && Array.isArray(ret.moderators)) {
+            ret.moderators = ret.moderators.map((id: any) =>
+                typeof id === 'object' && id._id ? id._id.toString() : id.toString()
+            );
+        }
+
+        return ret;
+    }
+});
+
+ForumSchema.set('toObject', { virtuals: true });
+
+// Métodos estáticos para consultas comuns
+ForumSchema.statics = {
+    /**
+     * Busca fóruns por empresa
+     */
+    findByCompany: function (companyId: Types.ObjectId, options = {}) {
+        return this.find({ company: companyId, ...options })
+            .sort({ lastActivity: -1 });
+    },
+
+    /**
+     * Busca fóruns por tag dentro de uma empresa
+     */
+    findByCompanyAndTag: function (companyId: Types.ObjectId, tag: string) {
+        return this.find({
+            company: companyId,
+            tags: tag
+        }).sort({ lastActivity: -1 });
+    },
+
+    /**
+     * Busca fóruns por texto dentro de uma empresa
+     */
+    searchInCompany: function (companyId: Types.ObjectId, searchText: string) {
+        return this.find({
+            company: companyId,
+            $text: { $search: searchText }
+        }, {
+            score: { $meta: "textScore" }
+        })
+            .sort({ score: { $meta: "textScore" } });
+    },
+
+    /**
+     * Busca fóruns populares por empresa (baseado em visualizações)
+     */
+    findPopularByCompany: function (companyId: Types.ObjectId, limit = 10) {
+        return this.find({
+            company: companyId,
+            isArchived: false
+        })
+            .sort({ viewCount: -1, messageCount: -1 })
+            .limit(limit);
+    },
+
+    /**
+     * Busca fóruns que um usuário segue dentro de uma empresa
+     */
+    findFollowedByUser: function (companyId: Types.ObjectId, userId: Types.ObjectId) {
+        return this.find({
+            company: companyId,
+            followers: userId
+        }).sort({ lastActivity: -1 });
+    }
+};
 
 const Forum = mongoose.model<IForum>('Forum', ForumSchema);
 

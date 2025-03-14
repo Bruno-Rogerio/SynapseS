@@ -4,8 +4,20 @@ import Mission, { IMission, ICheckpoint } from '../models/Mission';
 import { User } from '../models/User';
 import { v4 as uuidv4 } from 'uuid';
 import eventService from '../services/EventService';
-import { EventTypes } from '../constants/EventTypes';
+import { Types } from 'mongoose';
 
+// Adicionando constantes de permissão para missões
+const MISSION_PERMISSIONS = {
+  MISSION_VIEW: 'mission:view',
+  MISSION_CREATE: 'mission:create',
+  MISSION_EDIT: 'mission:edit',
+  MISSION_DELETE: 'mission:delete',
+  MISSION_MANAGE_ALL: 'mission:manage_all'
+};
+
+/**
+ * Converte status de checkpoint para formato consistente
+ */
 const convertCheckpointStatus = (status: string): ICheckpoint['status'] => {
   switch (status) {
     case 'pending':
@@ -20,10 +32,37 @@ const convertCheckpointStatus = (status: string): ICheckpoint['status'] => {
   }
 };
 
+/**
+ * Verifica se o usuário tem acesso à missão (é líder ou admin)
+ */
+const canManageMission = (userId: string, mission: IMission, isAdmin: boolean = false): boolean => {
+  // Admins sempre podem gerenciar missões de sua empresa
+  if (isAdmin) return true;
+
+  // O líder da missão pode gerenciá-la
+  return mission.leader === userId;
+};
+
+/**
+ * Cria uma nova missão
+ */
 export const createMission = async (req: Request, res: Response): Promise<void> => {
   try {
     console.log('Dados recebidos para criar missão:', req.body);
     const { title, description, leader, members, tasks, startDate, endDate, status, checkpoints } = req.body;
+
+    // Verificar se o usuário está autenticado e tem empresa associada
+    if (!req.user) {
+      res.status(403).json({ error: 'Usuário não autenticado' });
+      return;
+    }
+
+    const { userId, company } = req.user;
+
+    if (!userId || !company) {
+      res.status(403).json({ error: 'Usuário sem ID ou empresa associada' });
+      return;
+    }
 
     if (!members || !Array.isArray(members)) {
       res.status(400).json({ error: 'Membros não fornecidos ou inválidos.' });
@@ -32,6 +71,23 @@ export const createMission = async (req: Request, res: Response): Promise<void> 
 
     if (!members.includes(leader)) {
       res.status(400).json({ error: 'O líder deve ser um dos membros da missão.' });
+      return;
+    }
+
+    // Verificar se todos os membros pertencem à mesma empresa do usuário
+    const memberUsers = await User.find({
+      _id: { $in: members },
+      company
+    }).select('_id');
+
+    const validMemberIds = memberUsers.map(m => (m._id as Types.ObjectId).toString());
+    const invalidMembers = members.filter(id => !validMemberIds.includes(id.toString()));
+
+    if (invalidMembers.length > 0) {
+      res.status(400).json({
+        error: 'Alguns membros não pertencem à sua empresa ou não existem',
+        invalidMembers
+      });
       return;
     }
 
@@ -60,9 +116,10 @@ export const createMission = async (req: Request, res: Response): Promise<void> 
       startDate: new Date(startDate),
       endDate: endDate ? new Date(endDate) : undefined,
       status: status ? status : 'pendente',
+      company,
     };
 
-    const mission: IMission = new Mission(missionData);
+    const mission = new Mission(missionData);
     await mission.save();
     console.log('Missão criada:', mission);
 
@@ -77,12 +134,13 @@ export const createMission = async (req: Request, res: Response): Promise<void> 
 
       // Emitir evento para cada membro da missão (exceto o líder)
       eventService.emit('mission.created', {
-        missionId: mission._id,
+        missionId: mission._id.toString(),
         title: mission.title,
         description: mission.description,
         createdBy: leader,
         createdByName: leaderName,
-        recipients: membersToNotify
+        recipients: membersToNotify,
+        company: company.toString()
       });
 
       // Notificar sobre tarefas atribuídas na criação da missão
@@ -90,12 +148,13 @@ export const createMission = async (req: Request, res: Response): Promise<void> 
         tasks.forEach(task => {
           if (task.assignedTo && task.assignedTo !== leader) {
             eventService.emit('mission.task.assigned', {
-              missionId: mission._id,
+              missionId: mission._id.toString(),
               missionTitle: mission.title,
               taskId: task.id,
               taskTitle: task.title,
               assigneeId: task.assignedTo,
-              assignerId: leader
+              assignerId: leader,
+              company: company.toString()
             });
           }
         });
@@ -112,23 +171,67 @@ export const createMission = async (req: Request, res: Response): Promise<void> 
   }
 };
 
+/**
+ * Busca todas as missões da empresa do usuário
+ */
 export const getMissions = async (req: Request, res: Response): Promise<void> => {
   try {
-    const missions = await Mission.find();
-    res.status(200).json(missions.map(m => m.toJSON()));
+    // Verificar se o usuário está autenticado e tem empresa associada
+    if (!req.user) {
+      res.status(403).json({ error: 'Usuário não autenticado' });
+      return;
+    }
+
+    const { company } = req.user;
+
+    if (!company) {
+      res.status(403).json({ error: 'Usuário sem empresa associada' });
+      return;
+    }
+
+    // Filtrar por empresa do usuário
+    const missions = await Mission.find({ company });
+
+    // Simplesmente usar toJSON() em cada missão - o transform definido no modelo cuida da conversão
+    const missionList = missions.map(m => m.toJSON());
+
+    res.status(200).json(missionList);
   } catch (error) {
     console.error('Erro ao buscar missões:', error);
     res.status(500).json({ error: 'Erro ao buscar missões' });
   }
 };
 
+/**
+ * Busca uma missão específica por ID
+ */
 export const getMissionById = async (req: Request, res: Response): Promise<void> => {
   try {
-    const mission = await Mission.findById(req.params.id);
+    // Verificar se o usuário está autenticado e tem empresa associada
+    if (!req.user) {
+      res.status(403).json({ error: 'Usuário não autenticado' });
+      return;
+    }
+
+    const { company } = req.user;
+
+    if (!company) {
+      res.status(403).json({ error: 'Usuário sem empresa associada' });
+      return;
+    }
+
+    // Filtrar por ID e empresa do usuário
+    const mission = await Mission.findOne({
+      _id: req.params.id,
+      company
+    });
+
     if (!mission) {
       res.status(404).json({ error: 'Missão não encontrada' });
       return;
     }
+
+    // Simplesmente usar toJSON() - não é necessário modificar _id
     res.status(200).json(mission.toJSON());
   } catch (error) {
     console.error('Erro ao buscar missão:', error);
@@ -136,16 +239,66 @@ export const getMissionById = async (req: Request, res: Response): Promise<void>
   }
 };
 
+/**
+ * Atualiza uma missão existente
+ */
 export const updateMission = async (req: Request, res: Response): Promise<void> => {
   try {
     console.log('Dados recebidos para atualizar missão:', req.body);
     const { id } = req.params;
     const { title, description, leader, members, tasks, startDate, endDate, status, checkpoints } = req.body;
 
-    const mission = await Mission.findById(id);
+    // Verificar se o usuário está autenticado e tem empresa associada
+    if (!req.user) {
+      res.status(403).json({ error: 'Usuário não autenticado' });
+      return;
+    }
+
+    const { userId, company, permissions } = req.user;
+
+    if (!userId || !company) {
+      res.status(403).json({ error: 'Usuário sem ID ou empresa associada' });
+      return;
+    }
+
+    // Buscar missão filtrando por empresa
+    const mission = await Mission.findOne({
+      _id: id,
+      company
+    });
+
     if (!mission) {
       res.status(404).json({ error: 'Missão não encontrada.' });
       return;
+    }
+
+    // Verificar se o usuário tem permissão para atualizar a missão
+    const isAdmin = Array.isArray(permissions) &&
+      permissions.includes(MISSION_PERMISSIONS.MISSION_MANAGE_ALL);
+    const canManage = canManageMission(userId, mission, isAdmin);
+
+    if (!canManage) {
+      res.status(403).json({ error: 'Você não tem permissão para atualizar esta missão.' });
+      return;
+    }
+
+    // Se membros serão atualizados, verificar se todos pertencem à mesma empresa
+    if (members && Array.isArray(members)) {
+      const memberUsers = await User.find({
+        _id: { $in: members },
+        company
+      }).select('_id');
+
+      const validMemberIds = memberUsers.map(m => (m._id as Types.ObjectId).toString());
+      const invalidMembers = members.filter(id => !validMemberIds.includes(id.toString()));
+
+      if (invalidMembers.length > 0) {
+        res.status(400).json({
+          error: 'Alguns membros não pertencem à sua empresa ou não existem',
+          invalidMembers
+        });
+        return;
+      }
     }
 
     // Armazenar estado anterior para comparar mudanças
@@ -185,17 +338,20 @@ export const updateMission = async (req: Request, res: Response): Promise<void> 
     await mission.save();
     console.log('Missão atualizada:', mission);
 
+    const missionId = mission._id.toString();
+
     // Notificar sobre mudanças importantes
     try {
       // 1. Notificar se o status mudou
       if (previousStatus !== mission.status) {
         eventService.emit('mission.status.updated', {
-          missionId: mission._id,
+          missionId,
           missionTitle: mission.title,
           oldStatus: previousStatus,
           newStatus: mission.status,
-          updatedBy: leader,
-          recipients: mission.members.filter(m => m !== leader)
+          updatedBy: userId,
+          recipients: mission.members.filter(m => m !== userId),
+          company: company.toString()
         });
       }
 
@@ -203,10 +359,11 @@ export const updateMission = async (req: Request, res: Response): Promise<void> 
       const newMembers = mission.members.filter(m => !previousMembers.includes(m));
       if (newMembers.length > 0) {
         eventService.emit('mission.member.added', {
-          missionId: mission._id,
+          missionId,
           missionTitle: mission.title,
           addedMembers: newMembers,
-          addedBy: leader
+          addedBy: userId,
+          company: company.toString()
         });
       }
     } catch (notifyError) {
@@ -214,6 +371,7 @@ export const updateMission = async (req: Request, res: Response): Promise<void> 
       // Continuar mesmo se as notificações falharem
     }
 
+    // Simplesmente enviar o resultado de toJSON()
     res.status(200).json(mission.toJSON());
   } catch (error: any) {
     console.error('Erro ao atualizar missão:', error.message, error);
@@ -221,13 +379,47 @@ export const updateMission = async (req: Request, res: Response): Promise<void> 
   }
 };
 
+/**
+ * Remove uma missão
+ */
 export const deleteMission = async (req: Request, res: Response): Promise<void> => {
   try {
-    const mission = await Mission.findByIdAndDelete(req.params.id);
+    // Verificar se o usuário está autenticado e tem empresa associada
+    if (!req.user) {
+      res.status(403).json({ error: 'Usuário não autenticado' });
+      return;
+    }
+
+    const { userId, company, permissions } = req.user;
+
+    if (!userId || !company) {
+      res.status(403).json({ error: 'Usuário sem ID ou empresa associada' });
+      return;
+    }
+
+    // Buscar missão filtrando por empresa
+    const mission = await Mission.findOne({
+      _id: req.params.id,
+      company
+    });
+
     if (!mission) {
       res.status(404).json({ error: 'Missão não encontrada.' });
       return;
     }
+
+    // Verificar se o usuário tem permissão para excluir a missão
+    const isAdmin = Array.isArray(permissions) &&
+      permissions.includes(MISSION_PERMISSIONS.MISSION_MANAGE_ALL);
+    const canManage = canManageMission(userId, mission, isAdmin);
+
+    if (!canManage) {
+      res.status(403).json({ error: 'Você não tem permissão para excluir esta missão.' });
+      return;
+    }
+
+    await Mission.findByIdAndDelete(req.params.id);
+
     res.status(200).json({ message: 'Missão removida com sucesso.' });
   } catch (error) {
     console.error('Erro ao remover missão:', error);
@@ -235,20 +427,59 @@ export const deleteMission = async (req: Request, res: Response): Promise<void> 
   }
 };
 
+/**
+ * Adiciona uma tarefa a uma missão
+ */
 export const addTaskToMission = async (req: Request, res: Response): Promise<void> => {
   try {
     const { missionId } = req.params;
-    const { title, assignedTo, user } = req.body;
+    const { title, assignedTo } = req.body;
 
-    const mission = await Mission.findById(missionId);
+    // Verificar se o usuário está autenticado e tem empresa associada
+    if (!req.user) {
+      res.status(403).json({ error: 'Usuário não autenticado' });
+      return;
+    }
+
+    const { userId, company, permissions } = req.user;
+
+    if (!userId || !company) {
+      res.status(403).json({ error: 'Usuário sem ID ou empresa associada' });
+      return;
+    }
+
+    // Buscar missão filtrando por empresa
+    const mission = await Mission.findOne({
+      _id: missionId,
+      company
+    });
+
     if (!mission) {
       res.status(404).json({ error: 'Missão não encontrada.' });
       return;
     }
 
-    if (mission.leader !== user) {
-      res.status(403).json({ error: 'Apenas o líder pode adicionar tarefas.' });
+    // Verificar se o usuário tem permissão para gerenciar a missão
+    const isAdmin = Array.isArray(permissions) &&
+      permissions.includes(MISSION_PERMISSIONS.MISSION_MANAGE_ALL);
+    const canManage = canManageMission(userId, mission, isAdmin);
+
+    if (!canManage) {
+      res.status(403).json({ error: 'Você não tem permissão para adicionar tarefas a esta missão.' });
       return;
+    }
+
+    // Verificar se o usuário atribuído pertence à empresa
+    if (assignedTo) {
+      const assignedUser = await User.findOne({
+        _id: assignedTo,
+        company
+      });
+
+      if (!assignedUser) {
+        res.status(400).json({ error: 'O usuário atribuído não pertence à sua empresa ou não existe.' });
+        return;
+      }
     }
 
     const newTask = {
@@ -261,22 +492,26 @@ export const addTaskToMission = async (req: Request, res: Response): Promise<voi
     mission.tasks.push(newTask);
     await mission.save();
 
+    const missionIdStr = mission._id.toString();
+
     // Notificar o usuário atribuído à tarefa
     try {
-      if (assignedTo && assignedTo !== user) {
+      if (assignedTo && assignedTo !== userId) {
         eventService.emit('mission.task.assigned', {
-          missionId: mission._id,
+          missionId: missionIdStr,
           missionTitle: mission.title,
           taskId: newTask.id,
           taskTitle: newTask.title,
           assigneeId: assignedTo,
-          assignerId: user
+          assignerId: userId,
+          company: company.toString()
         });
       }
     } catch (notifyError) {
       console.error('Erro ao enviar notificação de atribuição de tarefa:', notifyError);
     }
 
+    // Simplesmente enviar o resultado de toJSON()
     res.status(200).json(mission.toJSON());
   } catch (error) {
     console.error('Erro ao adicionar tarefa:', error);
@@ -284,19 +519,45 @@ export const addTaskToMission = async (req: Request, res: Response): Promise<voi
   }
 };
 
+/**
+ * Atualiza o status de uma tarefa
+ */
 export const updateTaskStatus = async (req: Request, res: Response): Promise<void> => {
   try {
     const { missionId, taskId } = req.params;
-    const { status, user } = req.body;
+    const { status } = req.body;
 
-    const mission = await Mission.findById(missionId);
+    // Verificar se o usuário está autenticado e tem empresa associada
+    if (!req.user) {
+      res.status(403).json({ error: 'Usuário não autenticado' });
+      return;
+    }
+
+    const { userId, company, permissions } = req.user;
+
+    if (!userId || !company) {
+      res.status(403).json({ error: 'Usuário sem ID ou empresa associada' });
+      return;
+    }
+
+    // Buscar missão filtrando por empresa
+    const mission = await Mission.findOne({
+      _id: missionId,
+      company
+    });
+
     if (!mission) {
       res.status(404).json({ error: 'Missão não encontrada.' });
       return;
     }
 
-    if (mission.leader !== user) {
-      res.status(403).json({ error: 'Apenas o líder pode atualizar tarefas.' });
+    // Verificar se o usuário tem permissão para atualizar a missão
+    const isAdmin = Array.isArray(permissions) &&
+      permissions.includes(MISSION_PERMISSIONS.MISSION_MANAGE_ALL);
+    const canManage = canManageMission(userId, mission, isAdmin);
+
+    if (!canManage) {
+      res.status(403).json({ error: 'Você não tem permissão para atualizar tarefas desta missão.' });
       return;
     }
 
@@ -308,33 +569,37 @@ export const updateTaskStatus = async (req: Request, res: Response): Promise<voi
 
     const previousStatus = mission.tasks[taskIndex].status;
     mission.tasks[taskIndex].status = status as 'pendente' | 'em-progresso' | 'concluida';
+
     await mission.save();
+
+    const missionIdStr = mission._id.toString();
 
     // Notificar sobre atualização do status da tarefa
     try {
       const assignedTo = mission.tasks[taskIndex].assignedTo;
-
-      if (assignedTo && assignedTo !== user && previousStatus !== status) {
+      if (assignedTo && assignedTo !== userId && previousStatus !== status) {
         eventService.emit('mission.task.status.updated', {
-          missionId: mission._id,
+          missionId: missionIdStr,
           missionTitle: mission.title,
           taskId: taskId,
           taskTitle: mission.tasks[taskIndex].title,
           oldStatus: previousStatus,
           newStatus: status,
           assigneeId: assignedTo,
-          updatedBy: user
+          updatedBy: userId,
+          company: company.toString()
         });
 
         // Notificação especial para conclusão de tarefa
         if (status === 'concluida') {
           eventService.emit('mission.task.completed', {
-            missionId: mission._id,
+            missionId: missionIdStr,
             missionTitle: mission.title,
             taskId: taskId,
             taskTitle: mission.tasks[taskIndex].title,
             assigneeId: assignedTo,
-            completedBy: user
+            completedBy: userId,
+            company: company.toString()
           });
         }
       }
@@ -342,6 +607,7 @@ export const updateTaskStatus = async (req: Request, res: Response): Promise<voi
       console.error('Erro ao enviar notificação de atualização de status:', notifyError);
     }
 
+    // Simplesmente enviar o resultado de toJSON()
     res.status(200).json(mission.toJSON());
   } catch (error) {
     console.error('Erro ao atualizar status da tarefa:', error);
@@ -349,21 +615,60 @@ export const updateTaskStatus = async (req: Request, res: Response): Promise<voi
   }
 };
 
+/**
+ * Adiciona um checkpoint a uma missão
+ */
 export const addCheckpointToMission = async (req: Request, res: Response): Promise<void> => {
   try {
     console.log('Dados recebidos para adicionar checkpoint:', req.body);
     const { missionId } = req.params;
-    const { title, dueDate, status, user, assignedTo } = req.body;
+    const { title, dueDate, status, assignedTo } = req.body;
 
-    const mission = await Mission.findById(missionId);
+    // Verificar se o usuário está autenticado e tem empresa associada
+    if (!req.user) {
+      res.status(403).json({ error: 'Usuário não autenticado' });
+      return;
+    }
+
+    const { userId, company, permissions } = req.user;
+
+    if (!userId || !company) {
+      res.status(403).json({ error: 'Usuário sem ID ou empresa associada' });
+      return;
+    }
+
+    // Buscar missão filtrando por empresa
+    const mission = await Mission.findOne({
+      _id: missionId,
+      company
+    });
+
     if (!mission) {
       res.status(404).json({ error: 'Missão não encontrada.' });
       return;
     }
 
-    if (mission.leader !== user) {
-      res.status(403).json({ error: 'Apenas o líder pode adicionar checkpoints.' });
+    // Verificar se o usuário tem permissão para gerenciar a missão
+    const isAdmin = Array.isArray(permissions) &&
+      permissions.includes(MISSION_PERMISSIONS.MISSION_MANAGE_ALL);
+    const canManage = canManageMission(userId, mission, isAdmin);
+
+    if (!canManage) {
+      res.status(403).json({ error: 'Você não tem permissão para adicionar checkpoints a esta missão.' });
       return;
+    }
+
+    // Verificar se o usuário atribuído pertence à empresa
+    if (assignedTo) {
+      const assignedUser = await User.findOne({
+        _id: assignedTo,
+        company
+      });
+
+      if (!assignedUser) {
+        res.status(400).json({ error: 'O usuário atribuído não pertence à sua empresa ou não existe.' });
+        return;
+      }
     }
 
     const newCheckpoint: ICheckpoint = {
@@ -378,23 +683,27 @@ export const addCheckpointToMission = async (req: Request, res: Response): Promi
     await mission.save();
     console.log('Checkpoint adicionado:', newCheckpoint);
 
+    const missionIdStr = mission._id.toString();
+
     // Notificar usuário atribuído ao checkpoint
     try {
-      if (assignedTo && assignedTo !== user) {
+      if (assignedTo && assignedTo !== userId) {
         eventService.emit('mission.checkpoint.assigned', {
-          missionId: mission._id,
+          missionId: missionIdStr,
           missionTitle: mission.title,
           checkpointId: newCheckpoint.id,
           checkpointTitle: newCheckpoint.title,
           checkpointDueDate: newCheckpoint.dueDate,
           assigneeId: assignedTo,
-          assignerId: user
+          assignerId: userId,
+          company: company.toString()
         });
       }
     } catch (notifyError) {
       console.error('Erro ao enviar notificação de atribuição de checkpoint:', notifyError);
     }
 
+    // Simplesmente enviar o resultado de toJSON()
     res.status(200).json(mission.toJSON());
   } catch (error) {
     console.error('Erro ao adicionar checkpoint:', error);
@@ -402,19 +711,45 @@ export const addCheckpointToMission = async (req: Request, res: Response): Promi
   }
 };
 
+/**
+ * Atualiza o status de um checkpoint
+ */
 export const updateCheckpointStatus = async (req: Request, res: Response): Promise<void> => {
   try {
     const { missionId, checkpointId } = req.params;
-    const { status, user, assignedTo } = req.body;
+    const { status, assignedTo } = req.body;
 
-    const mission = await Mission.findById(missionId);
+    // Verificar se o usuário está autenticado e tem empresa associada
+    if (!req.user) {
+      res.status(403).json({ error: 'Usuário não autenticado' });
+      return;
+    }
+
+    const { userId, company, permissions } = req.user;
+
+    if (!userId || !company) {
+      res.status(403).json({ error: 'Usuário sem ID ou empresa associada' });
+      return;
+    }
+
+    // Buscar missão filtrando por empresa
+    const mission = await Mission.findOne({
+      _id: missionId,
+      company
+    });
+
     if (!mission) {
       res.status(404).json({ error: 'Missão não encontrada.' });
       return;
     }
 
-    if (mission.leader !== user) {
-      res.status(403).json({ error: 'Apenas o líder pode atualizar checkpoints.' });
+    // Verificar se o usuário tem permissão para atualizar a missão
+    const isAdmin = Array.isArray(permissions) &&
+      permissions.includes(MISSION_PERMISSIONS.MISSION_MANAGE_ALL);
+    const canManage = canManageMission(userId, mission, isAdmin);
+
+    if (!canManage) {
+      res.status(403).json({ error: 'Você não tem permissão para atualizar checkpoints desta missão.' });
       return;
     }
 
@@ -428,46 +763,63 @@ export const updateCheckpointStatus = async (req: Request, res: Response): Promi
     const previousAssignee = mission.checkpoints[cpIndex].assignedTo;
 
     mission.checkpoints[cpIndex].status = convertCheckpointStatus(status);
+
+    // Se um novo responsável for atribuído, verificar se ele existe e pertence à empresa
     if (assignedTo) {
+      const assignedUser = await User.findOne({
+        _id: assignedTo,
+        company
+      });
+
+      if (!assignedUser) {
+        res.status(400).json({ error: 'O usuário atribuído não pertence à sua empresa ou não existe.' });
+        return;
+      }
+
       mission.checkpoints[cpIndex].assignedTo = assignedTo;
     }
 
     await mission.save();
+
+    const missionIdStr = mission._id.toString();
 
     // Notificar sobre mudanças importantes no checkpoint
     try {
       const currentAssignee = mission.checkpoints[cpIndex].assignedTo;
 
       // Notificar sobre mudança de status (se houver alguém atribuído)
-      if (currentAssignee && currentAssignee !== user && previousStatus !== status) {
+      if (currentAssignee && currentAssignee !== userId && previousStatus !== status) {
         eventService.emit('mission.checkpoint.status.updated', {
-          missionId: mission._id,
+          missionId: missionIdStr,
           missionTitle: mission.title,
           checkpointId: checkpointId,
           checkpointTitle: mission.checkpoints[cpIndex].title,
           oldStatus: previousStatus,
           newStatus: mission.checkpoints[cpIndex].status,
           assigneeId: currentAssignee,
-          updatedBy: user
+          updatedBy: userId,
+          company: company.toString()
         });
       }
 
       // Notificar sobre mudança de responsável (se for alguém novo)
       if (assignedTo && previousAssignee !== assignedTo) {
         eventService.emit('mission.checkpoint.assigned', {
-          missionId: mission._id,
+          missionId: missionIdStr,
           missionTitle: mission.title,
           checkpointId: checkpointId,
           checkpointTitle: mission.checkpoints[cpIndex].title,
           checkpointDueDate: mission.checkpoints[cpIndex].dueDate,
           assigneeId: assignedTo,
-          assignerId: user
+          assignerId: userId,
+          company: company.toString()
         });
       }
     } catch (notifyError) {
       console.error('Erro ao enviar notificações de atualização de checkpoint:', notifyError);
     }
 
+    // Simplesmente enviar o resultado de toJSON()
     res.status(200).json(mission.toJSON());
   } catch (error) {
     console.error('Erro ao atualizar status do checkpoint:', error);
@@ -475,19 +827,101 @@ export const updateCheckpointStatus = async (req: Request, res: Response): Promi
   }
 };
 
+/**
+ * Remove um checkpoint de uma missão
+ */
 export const deleteCheckpointFromMission = async (req: Request, res: Response): Promise<void> => {
   try {
     const { missionId, checkpointId } = req.params;
-    const mission = await Mission.findById(missionId);
+
+    // Verificar se o usuário está autenticado e tem empresa associada
+    if (!req.user) {
+      res.status(403).json({ error: 'Usuário não autenticado' });
+      return;
+    }
+
+    const { userId, company, permissions } = req.user;
+
+    if (!userId || !company) {
+      res.status(403).json({ error: 'Usuário sem ID ou empresa associada' });
+      return;
+    }
+
+    // Buscar missão filtrando por empresa
+    const mission = await Mission.findOne({
+      _id: missionId,
+      company
+    });
+
     if (!mission) {
       res.status(404).json({ error: 'Missão não encontrada.' });
       return;
     }
+
+    // Verificar se o usuário tem permissão para gerenciar a missão
+    const isAdmin = Array.isArray(permissions) &&
+      permissions.includes(MISSION_PERMISSIONS.MISSION_MANAGE_ALL);
+    const canManage = canManageMission(userId, mission, isAdmin);
+
+    if (!canManage) {
+      res.status(403).json({ error: 'Você não tem permissão para remover checkpoints desta missão.' });
+      return;
+    }
+
     mission.checkpoints = mission.checkpoints.filter(cp => cp.id !== checkpointId);
     await mission.save();
+
+    // Simplesmente enviar o resultado de toJSON()
     res.status(200).json(mission.toJSON());
   } catch (error) {
     console.error('Erro ao remover checkpoint:', error);
     res.status(500).json({ error: 'Erro ao remover checkpoint' });
+  }
+};
+
+/**
+ * Busca missões por membro
+ */
+export const getMissionsByMember = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { memberId } = req.params;
+
+    // Verificar se o usuário está autenticado e tem empresa associada
+    if (!req.user) {
+      res.status(403).json({ error: 'Usuário não autenticado' });
+      return;
+    }
+
+    const { company } = req.user;
+
+    if (!company) {
+      res.status(403).json({ error: 'Usuário sem empresa associada' });
+      return;
+    }
+
+    // Verificar se o membro pertence à empresa do usuário
+    const member = await User.findOne({
+      _id: memberId,
+      company
+    });
+
+    if (!member) {
+      res.status(404).json({ error: 'Membro não encontrado na sua empresa.' });
+      return;
+    }
+
+    // Buscar missões onde o usuário especificado é membro
+    const missions = await Mission.find({
+      members: memberId,
+      company
+    });
+
+    // Simplesmente usar toJSON() em cada missão
+    const missionList = missions.map(m => m.toJSON());
+
+    res.status(200).json(missionList);
+  } catch (error) {
+    console.error('Erro ao buscar missões por membro:', error);
+    res.status(500).json({ error: 'Erro ao buscar missões por membro' });
   }
 };

@@ -1,15 +1,21 @@
+// src/models/User.ts
 import mongoose, { Document, Schema } from 'mongoose';
 import bcrypt from 'bcrypt';
+import { IRole } from './Role';
 
 export interface IUser extends Document {
   username: string;
   email: string;
   password: string;
   fullName: string;
-  role: 'admin' | 'gestor' | 'usuario'; // Ou use 'admin' | 'manager' | 'user' para corresponder ao enum
+  // Modificamos o tipo do role
+  role: mongoose.Types.ObjectId | IRole; // Pode ser populado
   company: mongoose.Types.ObjectId;
   inviteStatus: 'pending' | 'accepted' | 'expired';
-  bookmarks: mongoose.Types.ObjectId[]; // Nova propriedade para fóruns favoritos
+  bookmarks: mongoose.Types.ObjectId[];
+  // Novos campos para permissões personalizadas
+  additionalPermissions: string[];
+  restrictedPermissions: string[];
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
@@ -24,12 +30,21 @@ const UserSchema: Schema = new mongoose.Schema({
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
   fullName: { type: String, required: true },
-  role: { type: String, enum: ['admin', 'manager', 'user'], default: 'user' },
+  // Modificação aqui: de string para ObjectId com referência
+  role: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Role',
+    required: true
+  },
   company: { type: mongoose.Schema.Types.ObjectId, ref: 'Company', required: true },
   inviteStatus: { type: String, enum: ['pending', 'accepted', 'expired'], default: 'pending' },
-  bookmarks: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Forum', default: [] }], // Campo para armazenar favoritos
+  bookmarks: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Forum', default: [] }],
+  // Novos campos
+  additionalPermissions: [{ type: String, default: [] }],
+  restrictedPermissions: [{ type: String, default: [] }]
 }, { timestamps: true });
 
+// Métodos existentes permanecem iguais
 UserSchema.pre<IUser>('save', async function (next) {
   if (!this.isModified('password')) return next();
   try {

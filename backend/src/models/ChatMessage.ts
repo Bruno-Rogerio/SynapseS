@@ -16,6 +16,7 @@ export interface IChatMessage extends Document {
     reactions: Record<string, number>;
     createdAt: Date;
     replyTo?: IReplyTo;
+    company: mongoose.Types.ObjectId; // Novo campo para empresa
 }
 
 const ReplyToSchema: Schema = new Schema({
@@ -35,8 +36,18 @@ const ChatMessageSchema: Schema = new Schema(
         reactions: { type: Schema.Types.Mixed, default: {} },
         createdAt: { type: Date, default: Date.now },
         replyTo: ReplyToSchema,
+        // Adicionando campo company com índice para pesquisas eficientes
+        company: {
+            type: Schema.Types.ObjectId,
+            ref: 'Company',
+            required: true,
+            index: true // Adiciona índice para melhorar performance de consultas
+        },
     },
     { versionKey: false }
 );
+
+// Índice composto para consultas frequentes
+ChatMessageSchema.index({ company: 1, missionId: 1 });
 
 export default mongoose.model<IChatMessage>('ChatMessage', ChatMessageSchema);
